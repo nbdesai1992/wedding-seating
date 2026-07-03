@@ -11,78 +11,100 @@
 </head>
 <body>
   <div class="wrap">
-    <div class="topbar">
-      <span class="brand">Seat <span class="amp">&amp;</span> Celebrate</span>
-      <span class="tagline">seating charts, made lovely</span>
-    </div>
 
     <!-- HOME -->
     <section id="home">
+      <div class="topbar">
+        <span class="brand">Seat <span class="amp">&amp;</span> Celebrate</span>
+        <span class="tag">seating charts, made lovely</span>
+      </div>
       <div class="hero">
-        <h1 class="serif">Let’s seat your guests</h1>
-        <p>Create an event, arrange your tables, and drag everyone into place.</p>
+        <div class="orn">&#10086; &#10086; &#10086;</div>
+        <h1>Every guest, lovingly placed</h1>
+        <p>Plan your tables the way you picture the room — then let everyone find their seat.</p>
       </div>
-
-      <div class="panel new-event">
-        <h2>Start a new event</h2>
-        <form id="new-event-form">
-          <div class="field-row">
-            <div class="field" style="flex:2 1 240px;">
-              <label for="ev-name">Event name</label>
-              <input id="ev-name" name="name" placeholder="Emma &amp; James’s Wedding" required />
-            </div>
-            <div class="field">
-              <label for="ev-date">Date</label>
-              <input id="ev-date" name="event_date" type="date" />
-            </div>
-            <div class="field">
-              <label for="ev-venue">Venue</label>
-              <input id="ev-venue" name="venue" placeholder="The Old Barn" />
-            </div>
-          </div>
-          <div style="margin-top:16px;">
-            <button type="submit" class="btn-primary">Create event</button>
-          </div>
-        </form>
+      <div class="section"><h2>Your celebrations</h2><div class="rule"></div></div>
+      <div id="events-grid" class="grid">
+        <!-- new-celebration card + event cards injected -->
       </div>
-
-      <h2 class="section-title">Your events</h2>
-      <div id="events-grid" class="events-grid"></div>
     </section>
 
     <!-- EVENT -->
     <section id="event" class="hidden">
-      <div class="event-head">
-        <button class="linkish" id="back-btn">← All events</button>
-        <div style="width:100%; height:0;"></div>
-        <h1 id="event-title" class="serif"></h1>
-        <span class="meta" id="event-meta"></span>
-        <span class="spacer"></span>
-        <div class="toolbar">
-          <select id="table-shape" class="btn-ghost" title="Table shape">
-            <option value="round">Round</option>
-            <option value="long">Long</option>
-          </select>
-          <input id="table-seats" type="number" min="1" max="20" value="6" title="Seats" style="width:72px;" />
-          <button id="add-table-btn" class="btn-ghost">+ Add table</button>
-          <button id="import-btn" class="btn-ghost">Import guests (CSV)</button>
-          <a id="export-btn" class="btn-primary" href="#">Export CSV</a>
-          <input id="import-file" type="file" accept=".csv,text/csv" class="hidden" />
+      <div class="ehead">
+        <div class="hrow"><button class="back" id="back-btn">← All celebrations</button></div>
+        <div class="hrow">
+          <h1 id="event-title"></h1>
+          <span class="date" id="event-meta"></span>
+          <span class="spacer"></span>
+          <span class="saved" id="saved"><i>✓</i> Saved</span>
+          <div class="toolbar">
+            <div class="addmenu">
+              <button class="btn" id="add-table-btn">+ Add table ▾</button>
+              <div class="menu hidden" id="add-menu">
+                <div class="field"><label>Type</label>
+                  <select id="table-kind">
+                    <option value="round">Round table</option>
+                    <option value="banquet">Banquet table</option>
+                    <option value="head">Head table</option>
+                    <option value="sweetheart">Sweetheart (2)</option>
+                  </select>
+                </div>
+                <div class="field"><label>Seats</label><input id="table-seats" type="number" min="1" max="20" value="8" /></div>
+                <div class="row"><button class="btn primary" id="add-confirm" style="flex:1">Add to room</button></div>
+              </div>
+            </div>
+            <button class="btn" id="import-btn">Import guests</button>
+            <a class="btn primary" id="export-btn" href="#">Export chart</a>
+            <input id="import-file" type="file" accept=".csv,text/csv" class="hidden" />
+          </div>
         </div>
       </div>
 
-      <div class="workspace">
-        <div class="canvas-panel panel" style="padding:0;">
-          <div id="canvas" class="canvas">
-            <div class="canvas-hint">Drag tables to arrange the room. Drag guests onto a seat.</div>
+      <div class="stage">
+        <div class="canvas-wrap" id="canvas">
+          <div id="layer"></div>
+          <div class="empty-overlay hidden" id="empty-overlay">
+            <div class="ghost" style="left:70px;top:90px;width:150px;height:150px"></div>
+            <div class="ghost rect" style="left:500px;top:70px;width:230px;height:64px"></div>
+            <div class="ghost" style="left:590px;top:330px;width:120px;height:120px"></div>
+            <div class="ghost" style="left:150px;top:360px;width:120px;height:120px"></div>
+            <div class="ecard">
+              <div class="orn">&#10086; &#10086; &#10086;</div>
+              <h2 class="serif">Your room awaits</h2>
+              <p>Begin with a classic arrangement and shape it to your venue, or place your first table anywhere on the floor.</p>
+              <div class="templates">
+                <button class="tpl" data-tpl="classic">○ Classic rounds</button>
+                <button class="tpl" data-tpl="banquet">▭ Banquet rows</button>
+                <button class="tpl" data-tpl="mixed">✿ Mixed room</button>
+              </div>
+              <div class="or">— or —</div>
+              <button class="btn primary" id="first-table-btn">+ Add your first table</button>
+            </div>
           </div>
+          <div class="zoomctl">
+            <button id="zoom-in" title="Zoom in">+</button>
+            <button id="zoom-out" title="Zoom out">−</button>
+            <button id="zoom-fit" title="Reset zoom">▣</button>
+          </div>
+          <div class="legend" id="legend"></div>
         </div>
 
-        <div id="guests-panel" class="guests-panel panel">
-          <h3>Unassigned guests</h3>
-          <div class="sub" id="guest-sub">Import a CSV to add your guest list.</div>
-          <div class="drop-hint">Drop here to unseat a guest</div>
-          <div id="guest-list" class="guest-list"></div>
+        <div id="guests-panel" class="panel">
+          <h3>Guests</h3>
+          <div id="gp-progress" class="hidden">
+            <div class="bar"><i id="pbar-fill" style="width:0%"></i></div>
+            <div class="plabel"><span id="plabel-left"></span><span id="plabel-right"></span></div>
+          </div>
+          <input class="search" id="gsearch" placeholder="Search guests or parties…" />
+          <div class="filters">
+            <span class="pill on" data-f="toplace" id="pill-toplace">To place</span>
+            <span class="pill" data-f="seated" id="pill-seated">Seated</span>
+            <span class="pill" data-f="all" id="pill-all">All</span>
+          </div>
+          <div class="chip rose hidden" id="cap-note" style="margin-bottom:10px;display:inline-block"></div>
+          <div class="drop-note hidden" id="gp-dropnote">Drop here to unseat a guest</div>
+          <div id="guest-list" class="glist"></div>
         </div>
       </div>
     </section>

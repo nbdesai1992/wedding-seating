@@ -11,12 +11,15 @@ async function listEvents() {
   )).rows;
   const tc = (await db.query('SELECT event_id, count(*) AS c FROM tables GROUP BY event_id')).rows;
   const gc = (await db.query('SELECT event_id, count(*) AS c FROM guests GROUP BY event_id')).rows;
+  const sc = (await db.query('SELECT event_id, count(*) AS c FROM guests WHERE table_id IS NOT NULL GROUP BY event_id')).rows;
   const tm = new Map(tc.map((r) => [r.event_id, parseInt(r.c, 10)]));
   const gm = new Map(gc.map((r) => [r.event_id, parseInt(r.c, 10)]));
+  const sm = new Map(sc.map((r) => [r.event_id, parseInt(r.c, 10)]));
   return events.map((e) => ({
     ...e,
     table_count: tm.get(e.id) || 0,
     guest_count: gm.get(e.id) || 0,
+    seated_count: sm.get(e.id) || 0,
   }));
 }
 
@@ -34,30 +37,30 @@ async function getEvent(id) {
   const ev = await db.query('SELECT id, name, event_date, venue, created_at FROM events WHERE id=$1', [id]);
   if (ev.rows.length === 0) return null;
   const tables = await db.query(
-    'SELECT id, event_id, label, shape, seats, x, y FROM tables WHERE event_id=$1 ORDER BY created_at',
+    'SELECT id, event_id, label, shape, seats, x, y, kind FROM tables WHERE event_id=$1 ORDER BY created_at',
     [id]
   );
   const guests = await db.query(
-    'SELECT id, event_id, name, email, notes, table_id, seat_index FROM guests WHERE event_id=$1 ORDER BY name',
+    'SELECT id, event_id, name, email, notes, party, table_id, seat_index FROM guests WHERE event_id=$1 ORDER BY name',
     [id]
   );
   return { ...ev.rows[0], tables: tables.rows, guests: guests.rows };
 }
 
 // ---------- tables ----------
-async function addTable(eventId, { label, shape, seats, x, y }) {
+async function addTable(eventId, { label, shape, seats, x, y, kind }) {
   const id = randomUUID();
   const { rows } = await db.query(
-    `INSERT INTO tables(id, event_id, label, shape, seats, x, y)
-     VALUES ($1,$2,$3,$4,$5,$6,$7)
-     RETURNING id, event_id, label, shape, seats, x, y`,
-    [id, eventId, label, shape, seats, x ?? 120, y ?? 120]
+    `INSERT INTO tables(id, event_id, label, shape, seats, x, y, kind)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+     RETURNING id, event_id, label, shape, seats, x, y, kind`,
+    [id, eventId, label, shape, seats, x ?? 120, y ?? 120, kind || 'standard']
   );
   return rows[0];
 }
 
 async function updateTable(id, patch) {
-  const allowed = ['label', 'shape', 'seats', 'x', 'y'];
+  const allowed = ['label', 'shape', 'seats', 'x', 'y', 'kind'];
   const sets = [];
   const vals = [];
   let i = 1;
@@ -70,14 +73,14 @@ async function updateTable(id, patch) {
   if (sets.length === 0) return getTable(id);
   vals.push(id);
   const { rows } = await db.query(
-    `UPDATE tables SET ${sets.join(', ')} WHERE id=$${i} RETURNING id, event_id, label, shape, seats, x, y`,
+    `UPDATE tables SET ${sets.join(', ')} WHERE id=$${i} RETURNING id, event_id, label, shape, seats, x, y, kind`,
     vals
   );
   return rows[0] || null;
 }
 
 async function getTable(id) {
-  const { rows } = await db.query('SELECT id, event_id, label, shape, seats, x, y FROM tables WHERE id=$1', [id]);
+  const { rows } = await db.query('SELECT id, event_id, label, shape, seats, x, y, kind FROM tables WHERE id=$1', [id]);
   return rows[0] || null;
 }
 
@@ -94,9 +97,9 @@ async function importGuests(eventId, guests) {
     for (const g of guests) {
       const id = randomUUID();
       const { rows } = await client.query(
-        `INSERT INTO guests(id, event_id, name, email, notes) VALUES ($1,$2,$3,$4,$5)
-         RETURNING id, event_id, name, email, notes, table_id, seat_index`,
-        [id, eventId, g.name, g.email || null, g.notes || null]
+        `INSERT INTO guests(id, event_id, name, email, notes, party) VALUES ($1,$2,$3,$4,$5,$6)
+         RETURNING id, event_id, name, email, notes, party, table_id, seat_index`,
+        [id, eventId, g.name, g.email || null, g.notes || null, g.party || null]
       );
       created.push(rows[0]);
     }
@@ -104,12 +107,12 @@ async function importGuests(eventId, guests) {
   return created;
 }
 
-async function addGuest(eventId, { name, email, notes }) {
+async function addGuest(eventId, { name, email, notes, party }) {
   const id = randomUUID();
   const { rows } = await db.query(
-    `INSERT INTO guests(id, event_id, name, email, notes) VALUES ($1,$2,$3,$4,$5)
-     RETURNING id, event_id, name, email, notes, table_id, seat_index`,
-    [id, eventId, name, email || null, notes || null]
+    `INSERT INTO guests(id, event_id, name, email, notes, party) VALUES ($1,$2,$3,$4,$5,$6)
+     RETURNING id, event_id, name, email, notes, party, table_id, seat_index`,
+    [id, eventId, name, email || null, notes || null, party || null]
   );
   return rows[0];
 }
@@ -139,7 +142,7 @@ async function updateGuest(id, patch) {
 
     const { rows } = await client.query(
       `UPDATE guests SET table_id=$1, seat_index=$2 WHERE id=$3
-       RETURNING id, event_id, name, email, notes, table_id, seat_index`,
+       RETURNING id, event_id, name, email, notes, party, table_id, seat_index`,
       [nextTable || null, nextTable ? nextSeat : null, id]
     );
     return { guest: rows[0] };
@@ -153,7 +156,7 @@ async function deleteGuest(id) {
 // ---------- export ----------
 async function exportRows(eventId) {
   const { rows } = await db.query(
-    `SELECT g.name, g.email, g.notes, t.label AS table_label, g.seat_index
+    `SELECT g.name, g.email, g.notes, g.party, t.label AS table_label, g.seat_index
      FROM guests g
      LEFT JOIN tables t ON t.id = g.table_id
      WHERE g.event_id=$1

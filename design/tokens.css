@@ -1,0 +1,10 @@
+/* Approved design tokens — wedding-seating (from Claude Design project wedding-seating-design) */
+:root{
+  --ivory:#fbf7f2; --paper:#fffdfb; --ink:#3d3733; --muted:#8c8177;
+  --blush:#e7c9c4; --blush-deep:#d99a92; --blush-tint:#f7e9e6;
+  --sage:#7d8c72; --sage-deep:#5f6d55; --sage-tint:#eef0e8;
+  --line:#e8ddd2; --gold:#c9a96a;
+  --radius:16px; --radius-lg:22px;
+  --shadow:0 8px 30px rgba(90,70,60,.10); --shadow-soft:0 2px 10px rgba(90,70,60,.07);
+  --font-display:'Cormorant Garamond',Georgia,serif; --font-ui:'Inter',-apple-system,sans-serif;
+}

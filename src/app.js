@@ -48,12 +48,14 @@ function createApp() {
     const ev = await repo.getEvent(req.params.id);
     if (!ev) return res.status(404).json({ error: 'not_found' });
     const shape = req.body.shape === 'long' ? 'long' : 'round';
+    const kind = ['head', 'sweetheart'].includes(req.body.kind) ? req.body.kind : 'standard';
     let seats = parseInt(req.body.seats, 10);
-    if (!Number.isFinite(seats)) seats = shape === 'long' ? 8 : 6;
+    if (!Number.isFinite(seats)) seats = kind === 'sweetheart' ? 2 : (shape === 'long' ? 8 : 6);
     seats = Math.max(1, Math.min(20, seats));
-    const label = (req.body.label || '').trim() || `Table ${ev.tables.length + 1}`;
+    const label = (req.body.label || '').trim() ||
+      (kind === 'head' ? 'Head Table' : kind === 'sweetheart' ? 'Sweetheart' : `Table ${ev.tables.length + 1}`);
     const table = await repo.addTable(req.params.id, {
-      label, shape, seats,
+      label, shape, seats, kind,
       x: Number.isFinite(+req.body.x) ? +req.body.x : 120,
       y: Number.isFinite(+req.body.y) ? +req.body.y : 120,
     });
@@ -65,6 +67,7 @@ function createApp() {
     if (req.body.label !== undefined) patch.label = String(req.body.label).trim() || 'Table';
     if (req.body.shape !== undefined) patch.shape = req.body.shape === 'long' ? 'long' : 'round';
     if (req.body.seats !== undefined) patch.seats = Math.max(1, Math.min(20, parseInt(req.body.seats, 10) || 1));
+    if (req.body.kind !== undefined) patch.kind = ['head', 'sweetheart'].includes(req.body.kind) ? req.body.kind : 'standard';
     if (req.body.x !== undefined) patch.x = +req.body.x;
     if (req.body.y !== undefined) patch.y = +req.body.y;
     const table = await repo.updateTable(req.params.id, patch);
@@ -85,6 +88,7 @@ function createApp() {
     if (!name) return res.status(400).json({ error: 'name_required' });
     const guest = await repo.addGuest(req.params.id, {
       name, email: (req.body.email || '').trim() || null, notes: (req.body.notes || '').trim() || null,
+      party: (req.body.party || '').trim() || null,
     });
     res.status(201).json(guest);
   }));
@@ -123,11 +127,12 @@ function createApp() {
     const out = rows.map((r) => [
       r.name,
       r.email || '',
+      r.party || '',
       r.table_label || 'Unassigned',
       r.table_label && r.seat_index != null ? r.seat_index + 1 : '',
       r.notes || '',
     ]);
-    const csv = toCsv(['Guest', 'Email', 'Table', 'Seat', 'Notes'], out);
+    const csv = toCsv(['Guest', 'Email', 'Party', 'Table', 'Seat', 'Notes'], out);
     const safe = (ev.name || 'seating').replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').toLowerCase() || 'seating';
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="${safe}-seating.csv"`);

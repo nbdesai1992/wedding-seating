@@ -45,6 +45,22 @@ Primarily the **bride** (or a close planner/family member), non-technical, desig
 - **Density:** low. Big touch targets, clear primary actions. Empty states are inviting, not blank.
 - **Responsive:** laptop-first; on phones the canvas is pannable and readable, editing gracefully de-emphasized.
 
+## 6b. Approved design (the visual oracle)
+The approved design lives in `design/approved/` (synced from Claude Design project
+`wedding-seating-design`; approved by Neal via rendered screenshots, 2026-07-03).
+**`design/approved/frames/*.png` are the grading oracle** — the shipped app must match
+their layout, hierarchy, palette, and spirit. Tokens: `design/tokens.css`.
+
+## 6c. Visual acceptance rubric (graded by ui-verify from screenshots)
+1. Home: editorial hero + celebration cards with seating-progress + dashed new-celebration card (per frame 01).
+2. First-run room invites action: ghost tables, "Your room awaits", template starts, guest-import panel — never a bare canvas (per frame 02).
+3. With a populated room, table types read at a glance: rounds sized by capacity, banquets, blush-gradient head table, sweetheart-for-2 (per frame 03).
+4. With 160 imported guests, the panel stays workable: search, To place/Seated filters, party cards with "Seat together", progress bar.
+5. No table overlaps or canvas-edge clipping at populated scale.
+6. The bride is told when unplaced guests exceed open seats (capacity note).
+7. Interactions visibly take effect (seat/reseat/unseat, seat-party) in the after-state.
+8. Mobile (390px) home renders cleanly — wordmark intact, cards stacked.
+
 ## 7. Acceptance criteria (the "works" contract — verified on the LIVE url)
 1. Home lists all events and a **New event** action creates one; after reload the event still appears (persisted, visible to any visitor).
 2. Inside an event, adding a table (round or long, with a seat count) places it on the canvas; dragging it changes its position, and both position and seat count survive a reload.

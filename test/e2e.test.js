@@ -70,15 +70,26 @@ test('full seating flow: create -> tables -> import -> assign -> export', async 
   assert.equal(Math.round(movedt.y), 300);
   assert.equal(ev.tables.length, 2);
 
-  // 3. import guests via CSV
-  const csv = 'Name,Email\nAda Lovelace,ada@x.com\nGrace Hopper,grace@x.com\n"Curie, Marie",marie@x.com\n';
+  // 2c. table kinds: head + sweetheart variants persist
+  const th = await req('POST', `/api/events/${eventId}/tables`, { kind: 'head', seats: 8 });
+  assert.equal(th.status, 201);
+  assert.equal(th.data.kind, 'head');
+  assert.equal(th.data.label, 'Head Table');
+  const ts = await req('POST', `/api/events/${eventId}/tables`, { kind: 'sweetheart' });
+  assert.equal(ts.data.kind, 'sweetheart');
+  assert.equal(ts.data.seats, 2, 'sweetheart defaults to 2 seats');
+
+  // 3. import guests via CSV (party column honored)
+  const csv = 'Name,Email,Party\nAda Lovelace,ada@x.com,\nGrace Hopper,grace@x.com,Hopper\n"Curie, Marie",marie@x.com,Hopper\n';
   const imp = await req('POST', `/api/events/${eventId}/guests/import`, { csv });
   assert.equal(imp.status, 201);
   assert.equal(imp.data.imported, 3, 'three guests imported (quoted comma handled)');
+  assert.equal(imp.data.guests.filter((g) => g.party === 'Hopper').length, 2, 'party column parsed');
 
   ev = (await req('GET', `/api/events/${eventId}`)).data;
   assert.equal(ev.guests.length, 3);
   assert.ok(ev.guests.every((g) => !g.table_id), 'all guests start unassigned');
+  assert.equal(ev.tables.length, 4, 'round + long + head + sweetheart present');
   const ada = ev.guests.find((g) => g.name === 'Ada Lovelace');
   const grace = ev.guests.find((g) => g.name === 'Grace Hopper');
   const marie = ev.guests.find((g) => g.name === 'Curie, Marie');
@@ -111,7 +122,7 @@ test('full seating flow: create -> tables -> import -> assign -> export', async 
   assert.match(exp.headers.get('content-type'), /text\/csv/);
   const text = await exp.text();
   const lines = text.trim().split(/\r?\n/);
-  assert.equal(lines[0], 'Guest,Email,Table,Seat,Notes');
+  assert.equal(lines[0], 'Guest,Email,Party,Table,Seat,Notes');
   // marie is seated at table1 seat 2 (1-indexed) with a quoted name
   const marieRow = lines.find((l) => l.includes('Curie, Marie'));
   assert.ok(/"Curie, Marie"/.test(marieRow), 'quoted name escaped in export');

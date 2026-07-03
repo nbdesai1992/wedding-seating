@@ -49,6 +49,7 @@ function guestsFromCsv(text) {
   const nameIdx = header.findIndex((h) => ['name', 'guest', 'guest name', 'full name'].includes(h));
   const emailIdx = header.findIndex((h) => ['email', 'e-mail', 'email address'].includes(h));
   const notesIdx = header.findIndex((h) => ['notes', 'note', 'dietary', 'comments'].includes(h));
+  const partyIdx = header.findIndex((h) => ['party', 'group', 'household', 'family'].includes(h));
 
   if (nameIdx === -1) {
     return { guests: [], error: 'CSV must have a "name" column.' };
@@ -63,6 +64,7 @@ function guestsFromCsv(text) {
       name,
       email: emailIdx > -1 ? (cells[emailIdx] || '').trim() || null : null,
       notes: notesIdx > -1 ? (cells[notesIdx] || '').trim() || null : null,
+      party: partyIdx > -1 ? (cells[partyIdx] || '').trim() || null : null,
     });
   }
   if (guests.length === 0) return { guests: [], error: 'No guest rows found under the "name" column.' };
