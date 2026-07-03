@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: wedding-seating
+    runtime: node
+    plan: free
+    rootDir: .
+    buildCommand: npm ci
+    startCommand: node src/server.js
+    healthCheckPath: /healthz
+    preDeployCommand: node src/migrate.js
+    envVars:
+      - key: NODE_VERSION
+        value: "20.18.0"
+      - key: DATABASE_URL
+        fromDatabase:
+          name: wedding-seating-db
+          property: connectionString
+
+databases:
+  - name: wedding-seating-db
+    plan: basic_256mb

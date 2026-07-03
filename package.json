@@ -1,0 +1,22 @@
+{
+  "name": "wedding-seating",
+  "version": "1.0.0",
+  "description": "Elegant, bride-focused wedding seating planner — drag-and-drop tables, CSV guest import/export.",
+  "type": "commonjs",
+  "engines": {
+    "node": "20.x"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "migrate": "node src/migrate.js",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "multer": "^2.0.1",
+    "pg": "^8.11.5"
+  },
+  "devDependencies": {
+    "pg-mem": "^2.8.1"
+  }
+}
