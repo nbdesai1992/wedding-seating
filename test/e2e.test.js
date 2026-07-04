@@ -218,6 +218,96 @@ test('gate: /api/me -> 401 unauth, 200 with email for a member', async () => {
   assert.deepEqual(me.data, { email: MEMBER, role: 'admin' }, 'owner seeded admin by 005');
 });
 
+// ---- admin role + guest-list API (SPEC-004 R1/R2/R3) ----
+const ADMIN = MEMBER; // seeded owner; role=admin since migration 005
+
+test('admin: invite -> immediate access, duplicate 409, block/unblock/remove live', async () => {
+  // invite (mixed case in, lowercase stored, provenance recorded)
+  let r = await req('POST', '/api/admin/members', { email: 'Guest.One@Example.com' });
+  assert.equal(r.status, 201);
+  assert.equal(r.data.email, 'guest.one@example.com', 'email lowercased');
+  assert.equal(r.data.role, 'member');
+  assert.equal(r.data.invited_by, ADMIN, 'provenance recorded');
+
+  // invited email gets in immediately — no redeploy, next request
+  const guestH = { 'x-test-email': 'guest.one@example.com' };
+  assert.equal((await req('GET', '/api/events', undefined, guestH)).status, 200);
+
+  // duplicate invite → friendly 409
+  r = await req('POST', '/api/admin/members', { email: 'guest.one@example.com' });
+  assert.equal(r.status, 409);
+  assert.match(r.data.message, /already on the list/);
+
+  // invalid email → 400
+  assert.equal((await req('POST', '/api/admin/members', { email: 'not-an-email' })).status, 400);
+
+  // list carries computed flags for the panel
+  r = await req('GET', '/api/admin/members');
+  assert.equal(r.status, 200);
+  const own = r.data.find((m) => m.email === ADMIN);
+  assert.equal(own.isSelf, true);
+  assert.equal(own.isLastAdmin, true, 'seed is the only active admin');
+  assert.equal(r.data.find((m) => m.email === 'guest.one@example.com').isLastAdmin, false);
+
+  // block → immediate 403; unblock → immediate access; remove → 403 again
+  assert.equal((await req('PATCH', '/api/admin/members/guest.one@example.com', { status: 'blocked' })).status, 200);
+  assert.equal((await req('GET', '/api/events', undefined, guestH)).status, 403);
+  assert.equal((await req('PATCH', '/api/admin/members/guest.one@example.com', { status: 'active' })).status, 200);
+  assert.equal((await req('GET', '/api/events', undefined, guestH)).status, 200);
+  assert.equal((await req('DELETE', '/api/admin/members/guest.one@example.com')).status, 200);
+  assert.equal((await req('GET', '/api/events', undefined, guestH)).status, 403);
+});
+
+test('member: role in /api/me, 403 on every admin route; unauth admin routes 401', async () => {
+  assert.equal((await req('POST', '/api/admin/members', { email: 'plain@example.com' })).status, 201);
+  const H = { 'x-test-email': 'plain@example.com' };
+
+  const me = await req('GET', '/api/me', undefined, H);
+  assert.deepEqual(me.data, { email: 'plain@example.com', role: 'member' }, 'no panel flag for members');
+
+  for (const [method, p, body] of [
+    ['GET', '/api/admin/members', undefined],
+    ['POST', '/api/admin/members', { email: 'x@y.co' }],
+    ['PATCH', `/api/admin/members/${ADMIN}`, { status: 'blocked' }],
+    ['DELETE', `/api/admin/members/${ADMIN}`, undefined],
+  ]) {
+    const r = await req(method, p, body, H);
+    assert.equal(r.status, 403, `${method} ${p} forbidden for plain member`);
+  }
+  assert.equal((await fetch(`${base}/api/admin/members`)).status, 401, 'unauth admin route');
+  // and the failed attempts changed nothing
+  assert.equal((await req('GET', '/api/me')).data.role, 'admin');
+});
+
+test('rails: last-admin demote/block/remove and self-block/remove -> 4xx', async () => {
+  // seed is currently the only active admin
+  let r = await req('PATCH', `/api/admin/members/${ADMIN}`, { role: 'member' });
+  assert.equal(r.status, 409, 'last-admin demote refused');
+  assert.match(r.data.message, /last admin stays/i);
+  r = await req('PATCH', `/api/admin/members/${ADMIN}`, { status: 'blocked' });
+  assert.ok(r.status === 400 || r.status === 409, 'last-admin/self block refused');
+  r = await req('DELETE', `/api/admin/members/${ADMIN}`);
+  assert.ok(r.status === 400 || r.status === 409, 'last-admin/self remove refused');
+
+  // with a second active admin the last-admin rail lifts, self rails stay
+  assert.equal((await req('POST', '/api/admin/members', { email: 'second.admin@example.com', role: 'admin' })).status, 201);
+  r = await req('PATCH', `/api/admin/members/${ADMIN}`, { status: 'blocked' });
+  assert.equal(r.status, 400, 'self-block refused even with two admins');
+  assert.equal(r.data.error, 'self_block');
+  r = await req('PATCH', '/api/admin/members/second.admin@example.com', { role: 'member' });
+  assert.equal(r.status, 200, 'demoting a non-last admin is allowed');
+
+  // unknown target → 404
+  assert.equal((await req('PATCH', '/api/admin/members/ghost@example.com', { status: 'blocked' })).status, 404);
+  assert.equal((await req('DELETE', '/api/admin/members/ghost@example.com')).status, 404);
+
+  // cleanup: seed remains sole active admin
+  assert.equal((await req('DELETE', '/api/admin/members/second.admin@example.com')).status, 200);
+  assert.equal((await req('DELETE', '/api/admin/members/plain@example.com')).status, 200);
+  const list = (await req('GET', '/api/admin/members')).data;
+  assert.equal(list.find((m) => m.email === ADMIN).isLastAdmin, true);
+});
+
 test('gate: auth callback provider-error / missing-code -> gentle login notice', async () => {
   const err = await fetch(`${base}/auth/callback?error=access_denied`, { redirect: 'manual' });
   assert.equal(err.status, 302);
