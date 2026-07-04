@@ -76,3 +76,19 @@ their layout, hierarchy, palette, and spirit. Tokens: `design/tokens.css`.
 - **Persistence race** — rapid drags must not lose writes; debounce/position-save must be reliable and survive reload (core to criteria 2 & 4).
 - **Free-tier cold start** — first live hit may be slow; verification must retry through wake.
 - **Global shared state** — concurrent visitors edit the same events; acceptable for v1, note it in UI copy.
+
+## 9. Auth-gate surfaces (change 003 — added 2026-07-03)
+
+Two new utility surfaces, styled to the app's existing warm-elegant direction (§6) —
+they are the first thing guests-of-the-tool see, so they must not feel bolted-on.
+
+- **Sign-in page** (`/login`): app name + one warm sentence + a single "Sign in with
+  Google" action. Same typography/palette as the app; no bare default-browser look.
+- **Invitation-only page** (403): gracious, plain-language "access is by invitation"
+  message with the signed-in email shown and a sign-out link. No error-dump tone.
+
+### Visual rubric additions (ui-verify)
+- Login page renders styled (fonts + palette match the app) at desktop and mobile widths.
+- The Google sign-in action is the single obvious element on the login page.
+- 403 page shows the invitation message + signed-in email + working sign-out, styled.
+- No unstyled flash or layout jump between login/403 and the app shell.
