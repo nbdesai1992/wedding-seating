@@ -162,3 +162,49 @@ test('full seating flow: create -> tables -> import -> assign -> export', async 
   assert.ok(/Unassigned/.test(adaRow), 'unassigned guest marked Unassigned in export');
   assert.ok(!text.includes('DJ Marco'), 'fixtures never appear in the seating export');
 });
+
+// ---- auth gate (SPEC-003 R1/R3): matrix over the real app ----
+
+test('gate: unauthenticated -> 401 JSON on API, redirect on pages, open endpoints open', async () => {
+  const api = await fetch(`${base}/api/events`);
+  assert.equal(api.status, 401);
+  assert.deepEqual(await api.json(), { error: 'unauthorized' });
+
+  const page = await fetch(`${base}/`, { redirect: 'manual' });
+  assert.equal(page.status, 302);
+  assert.equal(page.headers.get('location'), '/login');
+
+  const appjs = await fetch(`${base}/app.js`, { redirect: 'manual' });
+  assert.equal(appjs.status, 302, 'app assets are gated too');
+
+  assert.equal((await fetch(`${base}/healthz`)).status, 200);
+  const login = await fetch(`${base}/login`);
+  assert.equal(login.status, 200);
+  assert.match(await login.text(), /Sign in with Google/);
+  assert.equal((await fetch(`${base}/styles.css`)).status, 200, 'login-page asset stays open');
+});
+
+test('gate: non-member -> 403 JSON on API, styled invitation page with email', async () => {
+  const api = await fetch(`${base}/api/events`, { headers: { 'x-test-email': 'stranger@example.com' } });
+  assert.equal(api.status, 403);
+  assert.deepEqual(await api.json(), { error: 'forbidden' });
+
+  const page = await fetch(`${base}/`, { headers: { 'x-test-email': 'stranger@example.com' } });
+  assert.equal(page.status, 403);
+  const html = await page.text();
+  assert.match(html, /by invitation/i);
+  assert.match(html, /stranger@example\.com/, '403 page shows the signed-in email');
+  assert.match(html, /styles\.css/, '403 page is styled');
+});
+
+test('gate: blocked member -> 403 (row status is live, no redeploy)', async () => {
+  await db.query("INSERT INTO app_members (email, status) VALUES ('blocked-e2e@example.com', 'blocked')");
+  const r = await fetch(`${base}/api/events`, { headers: { 'x-test-email': 'blocked-e2e@example.com' } });
+  assert.equal(r.status, 403);
+});
+
+test('gate: seeded member still has full access (data intact)', async () => {
+  const r = await req('GET', '/api/events');
+  assert.equal(r.status, 200);
+  assert.ok(Array.isArray(r.data) && r.data.length >= 1, 'member sees existing events');
+});
