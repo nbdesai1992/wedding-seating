@@ -1,7 +1,7 @@
 # Evidence — Wedding Seating Planner
 
 **Live URL:** https://wedding-seating-ymzs.onrender.com
-**Deployed commit (verified live):** `2d9a2ee925a14c88832e5588ce24640dc5a6e713` — status `live` (redesign to approved Claude Design; visual gate GREEN — see `.ship/ui/VISUAL_VERDICT.md`)
+**Deployed commit (verified live):** `5763b38` — status `live` (Brief 002: rotatable rectangular tables + named room fixtures; visual gate GREEN locally and live — see `.ship/ui/VISUAL_VERDICT.md`)
 
 ## Render resources
 | Resource | Name | ID | Plan |
