@@ -11,3 +11,5 @@ No human gates fired. A demo event ("Emma & James") was seeded during live verif
 left in place as a working sample (events are global by design; no auth yet — later phase).
 
 See `EVIDENCE.md` for IDs, verified commit, and per-criterion results.
+
+**Parked 2026-07-03:** Brief 003 blocked on final human gate — owner Google sign-in on the live URL (user unavailable to check). Everything else verified live; resume = owner signs in, report result.
