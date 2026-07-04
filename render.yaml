@@ -18,3 +18,11 @@ services:
         value: "20.18.0"
       - key: DATABASE_URL
         sync: false
+      # Auth gate (BRIEF-003): org login via factory-auth. Values set via API at
+      # integration time; the publishable key is client-safe (not a secret).
+      - key: SUPABASE_URL
+        value: "https://pvmmiqzmcfhylpyfqerd.supabase.co"
+      - key: SUPABASE_PUBLISHABLE_KEY
+        sync: false
+      - key: APP_URL
+        value: "https://wedding-seating-ymzs.onrender.com"
