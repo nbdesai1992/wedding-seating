@@ -12,7 +12,9 @@
     "test": "node --test test/*.test.js"
   },
   "dependencies": {
+    "cookie-parser": "^1.4.7",
     "express": "^4.19.2",
+    "jose": "^5.10.0",
     "multer": "^2.0.1",
     "pg": "^8.11.5"
   },
