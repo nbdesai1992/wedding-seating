@@ -68,6 +68,12 @@ function createApp() {
     if (!EMAIL_RE.test(email)) {
       return res.status(400).json({ error: 'invalid_email', message: 'That doesn’t look like an email address.' });
     }
+    // explicit pre-check for the 409 (pg-mem mishandles ON CONFLICT+RETURNING);
+    // ON CONFLICT stays as race-safety on real Postgres.
+    const dup = await db.query('SELECT 1 FROM app_members WHERE email = $1', [email]);
+    if (dup.rows.length > 0) {
+      return res.status(409).json({ error: 'already_member', message: `${email} is already on the list.` });
+    }
     const ins = await db.query(
       `INSERT INTO app_members (email, role, invited_by) VALUES ($1, $2, $3)
        ON CONFLICT (email) DO NOTHING RETURNING ${MEMBER_COLS}`,

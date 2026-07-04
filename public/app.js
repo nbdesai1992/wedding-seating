@@ -677,9 +677,98 @@ async function loadWhoami() {
       location.href = '/login';
     });
     box.append(out);
+    if (me.role === 'admin') $('#gl-link').classList.remove('hidden');
   } catch (_) { /* not signed in (test/bypass edge) — leave header quiet */ }
 }
 loadWhoami();
+
+// ---------- guest list (admin-only panel) ----------
+function glNote(msg, isErr) {
+  const n = $('#gl-note');
+  n.textContent = msg;
+  n.classList.remove('hidden');
+  n.classList.toggle('err', !!isErr);
+}
+
+function glAction(label, fn) {
+  const a = el('a', 'gl-act', label);
+  a.addEventListener('click', fn);
+  return a;
+}
+
+function glRow(m) {
+  const row = el('div', 'gl-row' + (m.status === 'blocked' ? ' blocked' : ''));
+
+  const who = el('div', 'gl-who');
+  who.append(el('div', 'gl-mail', m.email));
+  if (m.invited_by) who.append(el('div', 'gl-meta', `invited by ${m.invited_by}`));
+
+  const chips = el('div', 'gl-chips');
+  chips.append(el('span', m.role === 'admin' ? 'chip' : 'chip plain', m.role));
+  if (m.status === 'blocked') chips.append(el('span', 'chip rose', 'blocked'));
+
+  const acts = el('div', 'gl-acts');
+  if (m.isLastAdmin) {
+    acts.append(el('span', 'gl-why', 'the last admin stays'));
+  } else if (m.isSelf) {
+    acts.append(el('span', 'gl-why', 'that’s you'));
+  } else {
+    if (m.status === 'blocked') {
+      acts.append(glAction('welcome back', () => glPatch(m.email, { status: 'active' }, `${m.email} is welcome again.`)));
+    } else {
+      acts.append(glAction('block', () => glPatch(m.email, { status: 'blocked' }, `${m.email} can no longer sign in.`)));
+    }
+    acts.append(glAction('remove', async () => {
+      if (!confirm(`Remove ${m.email} from the guest list?`)) return;
+      try {
+        await api('DELETE', `/api/admin/members/${encodeURIComponent(m.email)}`);
+        glNote(`${m.email} removed.`);
+        await loadMembers();
+      } catch (e) { glNote(e.message, true); }
+    }));
+  }
+
+  row.append(who, chips, acts);
+  return row;
+}
+
+async function glPatch(email, body, doneMsg) {
+  try {
+    await api('PATCH', `/api/admin/members/${encodeURIComponent(email)}`, body);
+    glNote(doneMsg);
+    await loadMembers();
+  } catch (e) { glNote(e.message, true); }
+}
+
+async function loadMembers() {
+  const members = await api('GET', '/api/admin/members');
+  const box = $('#gl-rows');
+  box.textContent = '';
+  members.forEach((m) => box.append(glRow(m)));
+}
+
+$('#gl-link').addEventListener('click', async () => {
+  const panel = $('#guestlist');
+  const opening = panel.classList.contains('hidden');
+  panel.classList.toggle('hidden');
+  if (opening) {
+    try { await loadMembers(); } catch (e) { glNote(e.message, true); }
+    panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+});
+
+$('#gl-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const input = $('#gl-email');
+  const email = input.value.trim();
+  if (!email) return;
+  try {
+    await api('POST', '/api/admin/members', { email });
+    glNote('Invited — ask them to sign in with Google.');
+    input.value = '';
+    await loadMembers();
+  } catch (err) { glNote(err.message, true); }
+});
 
 // ---------- go ----------
 route();
