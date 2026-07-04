@@ -45,3 +45,4 @@ Grace Hopper,grace@x.com,Unassigned,,
 - Member list (live DB, post-cleanup): nbdesai1992@gmail.com only; org pool: nbdesai1992@gmail.com only
 - Visual: .ship/ui/VISUAL_VERDICT.md Brief-003 sections — local preflight GREEN (4 frames), live GREEN (L1/L2/L3)
 - OPEN (human): owner Google sign-in on the live URL — the one non-automatable criterion
+- 2026-07-03 (late): OWNER GOOGLE SIGN-IN CONFIRMED on the live URL by Neal ("Yes login worked!") — final acceptance criterion met. Brief 003 fully verified, no exceptions outstanding.
