@@ -35,7 +35,111 @@ function createApp() {
   app.use(auth.requireMember(db));
 
   // ---- session ----
-  app.get('/api/me', (req, res) => res.json({ email: req.user.email }));
+  app.get('/api/me', (req, res) => res.json({ email: req.user.email, role: req.user.role }));
+
+  // ---- guest-list admin (SPEC-004 R2/R3; role checked per request) ----
+  const EMAIL_RE = /^[a-z0-9][a-z0-9._%+-]*@[a-z0-9-]+(\.[a-z0-9-]+)+$/;
+  const MEMBER_COLS = 'email, role, status, invited_by, invited_at';
+  // rails throw this from inside the transaction; the route turns it into 4xx
+  function rail(status, body) {
+    const e = new Error(body.error);
+    e.rail = { status, body };
+    return e;
+  }
+  function railOr500(res, err) {
+    if (err.rail) return res.status(err.rail.status).json(err.rail.body);
+    throw err;
+  }
+
+  app.get('/api/admin/members', auth.requireAdmin, asyncH(async (req, res) => {
+    const { rows } = await db.query(
+      `SELECT ${MEMBER_COLS} FROM app_members ORDER BY invited_at, email`);
+    const activeAdmins = rows.filter((r) => r.role === 'admin' && r.status === 'active').length;
+    res.json(rows.map((r) => ({
+      ...r,
+      isSelf: r.email === req.user.email,
+      isLastAdmin: r.role === 'admin' && r.status === 'active' && activeAdmins === 1,
+    })));
+  }));
+
+  app.post('/api/admin/members', auth.requireAdmin, asyncH(async (req, res) => {
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    const role = req.body?.role === 'admin' ? 'admin' : 'member';
+    if (!EMAIL_RE.test(email)) {
+      return res.status(400).json({ error: 'invalid_email', message: 'That doesn’t look like an email address.' });
+    }
+    const ins = await db.query(
+      `INSERT INTO app_members (email, role, invited_by) VALUES ($1, $2, $3)
+       ON CONFLICT (email) DO NOTHING RETURNING ${MEMBER_COLS}`,
+      [email, role, req.user.email]);
+    if (ins.rows.length === 0) {
+      return res.status(409).json({ error: 'already_member', message: `${email} is already on the list.` });
+    }
+    res.status(201).json(ins.rows[0]);
+  }));
+
+  app.patch('/api/admin/members/:email', auth.requireAdmin, asyncH(async (req, res) => {
+    const target = String(req.params.email || '').trim().toLowerCase();
+    const patch = {};
+    if (req.body?.role !== undefined) {
+      if (!['admin', 'member'].includes(req.body.role)) return res.status(400).json({ error: 'invalid_role' });
+      patch.role = req.body.role;
+    }
+    if (req.body?.status !== undefined) {
+      if (!['active', 'blocked'].includes(req.body.status)) return res.status(400).json({ error: 'invalid_status' });
+      patch.status = req.body.status;
+    }
+    if (patch.role === undefined && patch.status === undefined) {
+      return res.status(400).json({ error: 'nothing_to_change' });
+    }
+    if (target === req.user.email && patch.status === 'blocked') {
+      return res.status(400).json({ error: 'self_block', message: 'You can’t block yourself.' });
+    }
+    try {
+      const updated = await db.withTransaction(async (client) => {
+        const cur = await client.query('SELECT email, role, status FROM app_members WHERE email = $1', [target]);
+        if (cur.rows.length === 0) throw rail(404, { error: 'not_found' });
+        const row = cur.rows[0];
+        const losesAdmin = row.role === 'admin' && row.status === 'active' &&
+          ((patch.role !== undefined && patch.role !== 'admin') ||
+           (patch.status !== undefined && patch.status !== 'active'));
+        if (losesAdmin) {
+          const c = await client.query(
+            "SELECT count(*) AS n FROM app_members WHERE role = 'admin' AND status = 'active'");
+          if (Number(c.rows[0].n) <= 1) {
+            throw rail(409, { error: 'last_admin', message: 'The last admin stays — promote someone else first.' });
+          }
+        }
+        const u = await client.query(
+          `UPDATE app_members SET role = $2, status = $3 WHERE email = $1 RETURNING ${MEMBER_COLS}`,
+          [target, patch.role ?? row.role, patch.status ?? row.status]);
+        return u.rows[0];
+      });
+      res.json(updated);
+    } catch (err) { railOr500(res, err); }
+  }));
+
+  app.delete('/api/admin/members/:email', auth.requireAdmin, asyncH(async (req, res) => {
+    const target = String(req.params.email || '').trim().toLowerCase();
+    if (target === req.user.email) {
+      return res.status(400).json({ error: 'self_remove', message: 'You can’t remove yourself.' });
+    }
+    try {
+      await db.withTransaction(async (client) => {
+        const cur = await client.query('SELECT role, status FROM app_members WHERE email = $1', [target]);
+        if (cur.rows.length === 0) throw rail(404, { error: 'not_found' });
+        if (cur.rows[0].role === 'admin' && cur.rows[0].status === 'active') {
+          const c = await client.query(
+            "SELECT count(*) AS n FROM app_members WHERE role = 'admin' AND status = 'active'");
+          if (Number(c.rows[0].n) <= 1) {
+            throw rail(409, { error: 'last_admin', message: 'The last admin stays — promote someone else first.' });
+          }
+        }
+        await client.query('DELETE FROM app_members WHERE email = $1', [target]);
+      });
+      res.json({ ok: true });
+    } catch (err) { railOr500(res, err); }
+  }));
 
   // ---- events ----
   app.get('/api/events', asyncH(async (req, res) => {

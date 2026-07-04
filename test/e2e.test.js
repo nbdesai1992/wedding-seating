@@ -215,7 +215,7 @@ test('gate: /api/me -> 401 unauth, 200 with email for a member', async () => {
 
   const me = await req('GET', '/api/me');
   assert.equal(me.status, 200);
-  assert.deepEqual(me.data, { email: MEMBER });
+  assert.deepEqual(me.data, { email: MEMBER, role: 'admin' }, 'owner seeded admin by 005');
 });
 
 test('gate: auth callback provider-error / missing-code -> gentle login notice', async () => {

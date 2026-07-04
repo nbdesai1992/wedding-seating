@@ -154,9 +154,9 @@ function requireMember(db) {
       }
 
       const m = await db.query(
-        "SELECT 1 FROM app_members WHERE email = $1 AND status = 'active'", [email]);
+        "SELECT role FROM app_members WHERE email = $1 AND status = 'active'", [email]);
       if (m.rows.length === 0) return forbidden(req, res, email);
-      req.user = { email };
+      req.user = { email, role: m.rows[0].role };
       next();
     } catch (err) {
       // verification / refresh errors are auth failures, not 500s
@@ -165,4 +165,11 @@ function requireMember(db) {
   };
 }
 
-module.exports = { routes, requireMember };
+// requireAdmin: mounted per-route AFTER requireMember — privilege comes from
+// the role column read on this request (no redeploy for role changes).
+function requireAdmin(req, res, next) {
+  if (req.user && req.user.role === 'admin') return next();
+  return res.status(403).json({ error: 'forbidden' });
+}
+
+module.exports = { routes, requireMember, requireAdmin };
