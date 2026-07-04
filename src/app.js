@@ -56,6 +56,7 @@ function createApp() {
       (kind === 'head' ? 'Head Table' : kind === 'sweetheart' ? 'Sweetheart' : `Table ${ev.tables.length + 1}`);
     const table = await repo.addTable(req.params.id, {
       label, shape, seats, kind,
+      orientation: req.body.orientation === 'vertical' ? 'vertical' : 'horizontal',
       x: Number.isFinite(+req.body.x) ? +req.body.x : 120,
       y: Number.isFinite(+req.body.y) ? +req.body.y : 120,
     });
@@ -68,6 +69,7 @@ function createApp() {
     if (req.body.shape !== undefined) patch.shape = req.body.shape === 'long' ? 'long' : 'round';
     if (req.body.seats !== undefined) patch.seats = Math.max(1, Math.min(20, parseInt(req.body.seats, 10) || 1));
     if (req.body.kind !== undefined) patch.kind = ['head', 'sweetheart'].includes(req.body.kind) ? req.body.kind : 'standard';
+    if (req.body.orientation !== undefined) patch.orientation = req.body.orientation === 'vertical' ? 'vertical' : 'horizontal';
     if (req.body.x !== undefined) patch.x = +req.body.x;
     if (req.body.y !== undefined) patch.y = +req.body.y;
     const table = await repo.updateTable(req.params.id, patch);
@@ -116,6 +118,46 @@ function createApp() {
 
   app.delete('/api/guests/:id', asyncH(async (req, res) => {
     await repo.deleteGuest(req.params.id);
+    res.json({ ok: true });
+  }));
+
+  // ---- fixtures (non-seating room shapes) ----
+  const FIXTURE_PRESETS = {
+    dj:     { label: 'DJ Booth',   shape: 'rect',  w: 140, h: 70 },
+    buffet: { label: 'Buffet',     shape: 'rect',  w: 220, h: 70 },
+    bar:    { label: 'Bar',        shape: 'rect',  w: 180, h: 70 },
+    dance:  { label: 'Dance Floor', shape: 'rect', w: 260, h: 160 },
+    stage:  { label: 'Stage',      shape: 'rect',  w: 240, h: 100 },
+    cake:   { label: 'Cake Table', shape: 'round', w: 90,  h: 90 },
+    gifts:  { label: 'Gift Table', shape: 'rect',  w: 110, h: 70 },
+    custom: { label: 'Room Item',  shape: 'rect',  w: 140, h: 90 },
+  };
+
+  app.post('/api/events/:id/fixtures', asyncH(async (req, res) => {
+    const ev = await repo.getEvent(req.params.id);
+    if (!ev) return res.status(404).json({ error: 'not_found' });
+    const ftype = FIXTURE_PRESETS[req.body.ftype] ? req.body.ftype : 'custom';
+    const preset = FIXTURE_PRESETS[ftype];
+    const label = (req.body.label || '').trim() || preset.label;
+    const fixture = await repo.addFixture(req.params.id, {
+      label, ftype, shape: preset.shape, w: preset.w, h: preset.h,
+      x: Number.isFinite(+req.body.x) ? +req.body.x : 220,
+      y: Number.isFinite(+req.body.y) ? +req.body.y : 220,
+    });
+    res.status(201).json(fixture);
+  }));
+
+  app.patch('/api/fixtures/:id', asyncH(async (req, res) => {
+    const patch = {};
+    if (req.body.label !== undefined) patch.label = String(req.body.label).trim() || 'Room Item';
+    for (const k of ['w', 'h', 'x', 'y']) if (req.body[k] !== undefined) patch[k] = +req.body[k];
+    const fixture = await repo.updateFixture(req.params.id, patch);
+    if (!fixture) return res.status(404).json({ error: 'not_found' });
+    res.json(fixture);
+  }));
+
+  app.delete('/api/fixtures/:id', asyncH(async (req, res) => {
+    await repo.deleteFixture(req.params.id);
     res.json({ ok: true });
   }));
 

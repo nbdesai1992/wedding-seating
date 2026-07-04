@@ -138,7 +138,9 @@ async function openEvent(id) {
   $('#event-title').textContent = current.name;
   $('#event-meta').textContent = [fmtDate(current.event_date), current.venue].filter(Boolean).join(' · ') || 'date to be set';
   $('#export-btn').setAttribute('href', `/api/events/${current.id}/export.csv`);
-  zoom = 1; applyZoom();
+  const cw = $('#canvas').getBoundingClientRect().width;
+  zoom = cw < 700 ? Math.max(0.42, cw / 840) : 1;   // fit-to-room on small viewports
+  applyZoom();
   renderAll();
 }
 $('#back-btn').addEventListener('click', () => { location.hash = ''; });
@@ -147,13 +149,26 @@ function renderAll() { renderCanvas(); renderGuests(); renderLegend(); }
 
 // ---------- table geometry (sizes express capacity, per approved design) ----------
 function tableSize(t) {
-  if (t.kind === 'sweetheart') return { w: 90, h: 90 };
-  if (t.kind === 'head') return { w: Math.max(240, 130 + t.seats * 21), h: 62 };
-  if (t.shape === 'long') return { w: Math.max(150, 76 + Math.ceil(t.seats / 2) * 30), h: 58 };
-  const d = Math.max(84, Math.min(170, 54 + t.seats * 8));
-  return { w: d, h: d };
+  let dims;
+  if (t.kind === 'sweetheart') dims = { w: 90, h: 90 };
+  else if (t.kind === 'head') dims = { w: Math.max(240, 130 + t.seats * 21), h: 62 };
+  else if (t.shape === 'long') dims = { w: Math.max(150, 76 + Math.ceil(t.seats / 2) * 30), h: 58 };
+  else { const d = Math.max(84, Math.min(170, 54 + t.seats * 8)); dims = { w: d, h: d }; }
+  if (t.orientation === 'vertical' && (t.shape === 'long' || t.kind === 'head')) {
+    dims = { w: dims.h, h: dims.w };
+  }
+  return dims;
 }
+const isRotatable = (t) => t.shape === 'long' || t.kind === 'head';
 function seatPositions(t, w, h) {
+  // vertical rectangles: compute seat layout on the horizontal footprint, then
+  // rotate each point 90° — seat indices stay stable so assignments survive rotation
+  if (t.orientation === 'vertical' && isRotatable(t)) {
+    return seatPositionsH(t, h, w).map((p) => ({ x: -p.y, y: p.x }));
+  }
+  return seatPositionsH(t, w, h);
+}
+function seatPositionsH(t, w, h) {
   const pts = [];
   if (t.kind === 'head') {
     // all seats along the bottom edge, facing the room
@@ -188,6 +203,25 @@ function renderCanvas() {
   layer.innerHTML = '';
   $('#empty-overlay').classList.toggle('hidden', current.tables.length > 0);
 
+  for (const fx of (current.fixtures || [])) {
+    const node = el('div', 'fixture-node');
+    node.style.left = fx.x + 'px';
+    node.style.top = fx.y + 'px';
+    const shape = el('div', 'fshape' + (fx.shape === 'round' ? ' round' : '') + (fx.h > fx.w * 1.4 ? ' portrait' : ''));
+    shape.style.width = fx.w + 'px'; shape.style.height = fx.h + 'px';
+    shape.style.marginLeft = (-fx.w / 2) + 'px'; shape.style.marginTop = (-fx.h / 2) + 'px';
+    shape.appendChild(el('span', 'flabel', fx.label));
+    node.appendChild(shape);
+    const tools = el('div', 'ttools');
+    const mk2 = (txt, title, fn) => { const b = el('button', null, txt); b.title = title; b.addEventListener('pointerdown', (e) => e.stopPropagation()); b.addEventListener('click', (e) => { e.stopPropagation(); fn(); }); return b; };
+    tools.append(mk2('✎', 'Rename', () => renameFixture(fx)));
+    if (fx.shape !== 'round') tools.append(mk2('⟳', 'Rotate', () => rotateFixture(fx)));
+    tools.append(mk2('🗑', 'Remove', () => deleteFixture(fx)));
+    node.appendChild(tools);
+    shape.addEventListener('pointerdown', (e) => startFixtureDrag(e, node, fx));
+    layer.appendChild(node);
+  }
+
   for (const table of current.tables) {
     const { w, h } = tableSize(table);
     const pts = seatPositions(table, w, h);
@@ -202,7 +236,9 @@ function renderCanvas() {
     const shape = el('div', `tshape ${shapeCls}`);
     shape.style.width = w + 'px'; shape.style.height = h + 'px';
     shape.style.marginLeft = (-w / 2) + 'px'; shape.style.marginTop = (-h / 2) + 'px';
-    shape.appendChild(el('div', 'tname', table.label));
+    const displayLabel = (t) => (t.orientation === 'vertical' && isRotatable(t))
+      ? t.label.replace(/\s+\u2014\s+/g, ' ') : t.label;
+    shape.appendChild(el('div', 'tname', displayLabel(table)));
     shape.appendChild(el('div', 'tcount', `${filled}/${table.seats}`));
     node.appendChild(shape);
 
@@ -222,8 +258,9 @@ function renderCanvas() {
 
     const tools = el('div', 'ttools');
     const mk = (txt, title, fn, cls) => { const b = el('button', cls, txt); b.title = title; b.addEventListener('pointerdown', (e) => e.stopPropagation()); b.addEventListener('click', (e) => { e.stopPropagation(); fn(); }); return b; };
+    tools.append(mk('✎', 'Rename', () => renameTable(table)));
+    if (isRotatable(table)) tools.append(mk('⟳', 'Rotate', () => rotateTable(table)));
     tools.append(
-      mk('✎', 'Rename', () => renameTable(table)),
       mk('−', 'Fewer seats', () => changeSeats(table, -1)),
       mk('+', 'More seats', () => changeSeats(table, +1)),
       mk('🗑', 'Remove table', () => deleteTable(table))
@@ -367,7 +404,7 @@ function startTableDrag(e, node, table) {
     const dx = (ev.clientX - startX) / zoom, dy = (ev.clientY - startY) / zoom;
     if (Math.abs(dx) + Math.abs(dy) > 3) moved = true;
     table.x = Math.max(50, Math.min(rect.width / zoom - 50, origX + dx));
-    table.y = Math.max(50, Math.min(rect.height / zoom - 50, origY + dy));
+    table.y = Math.max(50, Math.min(rect.height / zoom - 84, origY + dy));
     node.style.left = table.x + 'px'; node.style.top = table.y + 'px';
   }
   async function up() {
@@ -431,7 +468,7 @@ function startGuestDrag(e, guestId) {
 
 async function refresh() {
   const fresh = await api('GET', `/api/events/${current.id}`);
-  current.tables = fresh.tables; current.guests = fresh.guests;
+  current.tables = fresh.tables; current.guests = fresh.guests; current.fixtures = fresh.fixtures;
   renderAll();
 }
 
@@ -451,6 +488,16 @@ $('#add-confirm').addEventListener('click', () => {
   const seats = parseInt($('#table-seats').value, 10) || 8;
   toggleAddMenu(false);
   addTable(type, seats);
+});
+$('#fixture-type').addEventListener('change', () => {
+  $('#fixture-name-wrap').classList.toggle('hidden', $('#fixture-type').value !== 'custom');
+});
+$('#add-fixture-confirm').addEventListener('click', () => {
+  const ftype = $('#fixture-type').value;
+  const label = ftype === 'custom' ? ($('#fixture-name').value || '').trim() : undefined;
+  toggleAddMenu(false);
+  $('#fixture-name').value = '';
+  addFixture(ftype, label);
 });
 
 async function addTable(type, seats, x, y, label) {
@@ -486,6 +533,11 @@ const TEMPLATES = {
     ['banquet', 8, 810, 190], ['banquet', 8, 810, 320], ['round', 10, 830, 480],
   ],
 };
+const TEMPLATE_FIXTURES = {
+  classic: [['dance', 480, 300]],
+  banquet: [['dance', 480, 330]],
+  mixed: [['dance', 500, 250], ['dj', 500, 105]],
+};
 document.querySelectorAll('.tpl').forEach((b) => b.addEventListener('click', async () => {
   const rows = TEMPLATES[b.dataset.tpl];
   if (!rows) return;
@@ -495,6 +547,9 @@ document.querySelectorAll('.tpl').forEach((b) => b.addEventListener('click', asy
   const sx = rect.width / 960, sy = rect.height / 600;
   for (const [type, seats, x, y, label] of rows) {
     await addTable(type, seats, Math.round(x * sx), Math.round(y * sy), label);
+  }
+  for (const [ftype, x, y] of (TEMPLATE_FIXTURES[b.dataset.tpl] || [])) {
+    await addFixture(ftype, undefined, Math.round(x * sx), Math.round(y * sy));
   }
   await refresh();
   toast('Room ready — drag anything to fit your venue');
@@ -516,6 +571,82 @@ async function deleteTable(table) {
   if (!confirm(`Remove “${table.label}”? Guests there will be unseated.`)) return;
   try { await api('DELETE', `/api/tables/${table.id}`); await refresh(); savedBlip(); toast('Table removed'); }
   catch (e) { toast(e.message, true); }
+}
+
+// ---------- rotation + fixtures ----------
+async function rotateTable(table) {
+  const orientation = table.orientation === 'vertical' ? 'horizontal' : 'vertical';
+  try {
+    Object.assign(table, await api('PATCH', `/api/tables/${table.id}`, { orientation }));
+    renderAll(); savedBlip();
+  } catch (e) { toast(e.message, true); }
+}
+
+function startFixtureDrag(e, node, fx) {
+  if (e.button != null && e.button !== 0) return;
+  e.preventDefault();
+  const rect = $('#canvas').getBoundingClientRect();
+  const startX = e.clientX, startY = e.clientY;
+  const origX = fx.x, origY = fx.y;
+  let moved = false;
+  node.classList.add('dragging');
+  function move(ev) {
+    const dx = (ev.clientX - startX) / zoom, dy = (ev.clientY - startY) / zoom;
+    if (Math.abs(dx) + Math.abs(dy) > 3) moved = true;
+    fx.x = Math.max(40, Math.min(rect.width / zoom - 40, origX + dx));
+    fx.y = Math.max(40, Math.min(rect.height / zoom - 84, origY + dy));
+    node.style.left = fx.x + 'px'; node.style.top = fx.y + 'px';
+  }
+  async function up() {
+    document.removeEventListener('pointermove', move);
+    document.removeEventListener('pointerup', up);
+    node.classList.remove('dragging');
+    if (moved) {
+      try { await api('PATCH', `/api/fixtures/${fx.id}`, { x: fx.x, y: fx.y }); savedBlip(); }
+      catch (err) { toast('Could not save position', true); }
+    }
+  }
+  document.addEventListener('pointermove', move);
+  document.addEventListener('pointerup', up);
+}
+
+async function addFixture(ftype, label, x, y) {
+  const n = (current.fixtures || []).length;
+  try {
+    const fx = await api('POST', `/api/events/${current.id}/fixtures`, {
+      ftype, label, x: x ?? 260 + (n % 3) * 200, y: y ?? 220 + Math.floor(n / 3) * 160,
+    });
+    current.fixtures = current.fixtures || [];
+    current.fixtures.push(fx);
+    renderAll(); savedBlip();
+    toast(`${fx.label} added`);
+  } catch (e) { toast(e.message, true); }
+}
+
+async function renameFixture(fx) {
+  const name = prompt('Name this room item', fx.label);
+  if (name == null) return;
+  try {
+    Object.assign(fx, await api('PATCH', `/api/fixtures/${fx.id}`, { label: name.trim() || fx.label }));
+    renderAll(); savedBlip();
+  } catch (e) { toast(e.message, true); }
+}
+
+async function rotateFixture(fx) {
+  try {
+    Object.assign(fx, await api('PATCH', `/api/fixtures/${fx.id}`, { w: fx.h, h: fx.w }));
+    renderAll(); savedBlip();
+  } catch (e) { toast(e.message, true); }
+}
+
+async function deleteFixture(fx) {
+  if (!confirm(`Remove “${fx.label}” from the room?`)) return;
+  try {
+    await api('DELETE', `/api/fixtures/${fx.id}`);
+    current.fixtures = (current.fixtures || []).filter((f) => f.id !== fx.id);
+    renderAll(); savedBlip();
+    toast('Removed');
+  } catch (e) { toast(e.message, true); }
 }
 
 // ---------- import ----------

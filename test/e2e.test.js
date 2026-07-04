@@ -116,6 +116,31 @@ test('full seating flow: create -> tables -> import -> assign -> export', async 
   ev = (await req('GET', `/api/events/${eventId}`)).data;
   assert.equal(ev.guests.find((g) => g.id === ada.id).table_id, null, 'unassign persisted');
 
+  // 4b. rotation: vertical persists and does NOT disturb assignments
+  const rot = await req('PATCH', `/api/tables/${table1}`, { orientation: 'vertical' });
+  assert.equal(rot.status, 200);
+  assert.equal(rot.data.orientation, 'vertical');
+  ev = (await req('GET', `/api/events/${eventId}`)).data;
+  assert.equal(ev.tables.find((t) => t.id === table1).orientation, 'vertical', 'orientation persisted');
+  assert.equal(ev.guests.find((g) => g.id === marie.id).seat_index, 1, 'assignment survives rotation');
+  assert.equal(ev.guests.find((g) => g.id === marie.id).table_id, table1, 'guest still at rotated table');
+
+  // 4c. fixtures: create -> rename -> move -> persists -> delete
+  const fx = await req('POST', `/api/events/${eventId}/fixtures`, { ftype: 'dj' });
+  assert.equal(fx.status, 201);
+  assert.equal(fx.data.label, 'DJ Booth');
+  const fx2 = await req('POST', `/api/events/${eventId}/fixtures`, { ftype: 'custom', label: 'Photo Booth' });
+  assert.equal(fx2.data.label, 'Photo Booth');
+  await req('PATCH', `/api/fixtures/${fx.data.id}`, { label: 'DJ Marco', x: 333, y: 222 });
+  ev = (await req('GET', `/api/events/${eventId}`)).data;
+  assert.equal(ev.fixtures.length, 2, 'fixtures persist on event');
+  const dj = ev.fixtures.find((f) => f.id === fx.data.id);
+  assert.equal(dj.label, 'DJ Marco', 'fixture rename persisted');
+  assert.equal(Math.round(dj.x), 333, 'fixture move persisted');
+  assert.equal((await req('DELETE', `/api/fixtures/${fx2.data.id}`)).status, 200);
+  ev = (await req('GET', `/api/events/${eventId}`)).data;
+  assert.equal(ev.fixtures.length, 1, 'fixture delete persisted');
+
   // 5. export CSV reflects assignments
   const exp = await fetch(`${base}/api/events/${eventId}/export.csv`);
   assert.equal(exp.status, 200);
@@ -129,4 +154,5 @@ test('full seating flow: create -> tables -> import -> assign -> export', async 
   // ada is unassigned now
   const adaRow = lines.find((l) => l.startsWith('Ada Lovelace'));
   assert.ok(/Unassigned/.test(adaRow), 'unassigned guest marked Unassigned in export');
+  assert.ok(!text.includes('DJ Marco'), 'fixtures never appear in the seating export');
 });

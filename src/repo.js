@@ -37,30 +37,34 @@ async function getEvent(id) {
   const ev = await db.query('SELECT id, name, event_date, venue, created_at FROM events WHERE id=$1', [id]);
   if (ev.rows.length === 0) return null;
   const tables = await db.query(
-    'SELECT id, event_id, label, shape, seats, x, y, kind FROM tables WHERE event_id=$1 ORDER BY created_at',
+    'SELECT id, event_id, label, shape, seats, x, y, kind, orientation FROM tables WHERE event_id=$1 ORDER BY created_at',
     [id]
   );
   const guests = await db.query(
     'SELECT id, event_id, name, email, notes, party, table_id, seat_index FROM guests WHERE event_id=$1 ORDER BY name',
     [id]
   );
-  return { ...ev.rows[0], tables: tables.rows, guests: guests.rows };
+  const fixtures = await db.query(
+    'SELECT id, event_id, label, ftype, shape, w, h, x, y FROM fixtures WHERE event_id=$1 ORDER BY created_at',
+    [id]
+  );
+  return { ...ev.rows[0], tables: tables.rows, guests: guests.rows, fixtures: fixtures.rows };
 }
 
 // ---------- tables ----------
-async function addTable(eventId, { label, shape, seats, x, y, kind }) {
+async function addTable(eventId, { label, shape, seats, x, y, kind, orientation }) {
   const id = randomUUID();
   const { rows } = await db.query(
-    `INSERT INTO tables(id, event_id, label, shape, seats, x, y, kind)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-     RETURNING id, event_id, label, shape, seats, x, y, kind`,
-    [id, eventId, label, shape, seats, x ?? 120, y ?? 120, kind || 'standard']
+    `INSERT INTO tables(id, event_id, label, shape, seats, x, y, kind, orientation)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+     RETURNING id, event_id, label, shape, seats, x, y, kind, orientation`,
+    [id, eventId, label, shape, seats, x ?? 120, y ?? 120, kind || 'standard', orientation || 'horizontal']
   );
   return rows[0];
 }
 
 async function updateTable(id, patch) {
-  const allowed = ['label', 'shape', 'seats', 'x', 'y', 'kind'];
+  const allowed = ['label', 'shape', 'seats', 'x', 'y', 'kind', 'orientation'];
   const sets = [];
   const vals = [];
   let i = 1;
@@ -73,14 +77,14 @@ async function updateTable(id, patch) {
   if (sets.length === 0) return getTable(id);
   vals.push(id);
   const { rows } = await db.query(
-    `UPDATE tables SET ${sets.join(', ')} WHERE id=$${i} RETURNING id, event_id, label, shape, seats, x, y, kind`,
+    `UPDATE tables SET ${sets.join(', ')} WHERE id=$${i} RETURNING id, event_id, label, shape, seats, x, y, kind, orientation`,
     vals
   );
   return rows[0] || null;
 }
 
 async function getTable(id) {
-  const { rows } = await db.query('SELECT id, event_id, label, shape, seats, x, y, kind FROM tables WHERE id=$1', [id]);
+  const { rows } = await db.query('SELECT id, event_id, label, shape, seats, x, y, kind, orientation FROM tables WHERE id=$1', [id]);
   return rows[0] || null;
 }
 
@@ -153,6 +157,42 @@ async function deleteGuest(id) {
   await db.query('DELETE FROM guests WHERE id=$1', [id]);
 }
 
+// ---------- fixtures ----------
+async function addFixture(eventId, { label, ftype, shape, w, h, x, y }) {
+  const id = randomUUID();
+  const { rows } = await db.query(
+    `INSERT INTO fixtures(id, event_id, label, ftype, shape, w, h, x, y)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+     RETURNING id, event_id, label, ftype, shape, w, h, x, y`,
+    [id, eventId, label, ftype || 'custom', shape || 'rect', w ?? 140, h ?? 90, x ?? 200, y ?? 200]
+  );
+  return rows[0];
+}
+
+async function updateFixture(id, patch) {
+  const allowed = ['label', 'w', 'h', 'x', 'y'];
+  const sets = [];
+  const vals = [];
+  let i = 1;
+  for (const key of allowed) {
+    if (patch[key] !== undefined) {
+      sets.push(`${key}=$${i++}`);
+      vals.push(patch[key]);
+    }
+  }
+  if (sets.length === 0) return null;
+  vals.push(id);
+  const { rows } = await db.query(
+    `UPDATE fixtures SET ${sets.join(', ')} WHERE id=$${i} RETURNING id, event_id, label, ftype, shape, w, h, x, y`,
+    vals
+  );
+  return rows[0] || null;
+}
+
+async function deleteFixture(id) {
+  await db.query('DELETE FROM fixtures WHERE id=$1', [id]);
+}
+
 // ---------- export ----------
 async function exportRows(eventId) {
   const { rows } = await db.query(
@@ -170,5 +210,6 @@ module.exports = {
   listEvents, createEvent, getEvent,
   addTable, updateTable, getTable, deleteTable,
   importGuests, addGuest, updateGuest, deleteGuest,
+  addFixture, updateFixture, deleteFixture,
   exportRows,
 };

@@ -51,7 +51,22 @@
                   </select>
                 </div>
                 <div class="field"><label>Seats</label><input id="table-seats" type="number" min="1" max="20" value="8" /></div>
-                <div class="row"><button class="btn primary" id="add-confirm" style="flex:1">Add to room</button></div>
+                <div class="row"><button class="btn primary" id="add-confirm" style="flex:1">Add table</button></div>
+                <div class="menu-rule"></div>
+                <div class="field"><label>Room item (no seats)</label>
+                  <select id="fixture-type">
+                    <option value="dance">Dance floor</option>
+                    <option value="dj">DJ booth</option>
+                    <option value="buffet">Buffet</option>
+                    <option value="bar">Bar</option>
+                    <option value="stage">Stage</option>
+                    <option value="cake">Cake table</option>
+                    <option value="gifts">Gift table</option>
+                    <option value="custom">Custom…</option>
+                  </select>
+                </div>
+                <div class="field hidden" id="fixture-name-wrap"><label>Name</label><input id="fixture-name" placeholder="Photo booth" /></div>
+                <div class="row"><button class="btn" id="add-fixture-confirm" style="flex:1">Add room item</button></div>
               </div>
             </div>
             <button class="btn" id="import-btn">Import guests</button>
