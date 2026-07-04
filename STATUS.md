@@ -1,6 +1,6 @@
 # Status — Wedding Seating Planner
 
-**SHIPPED & VERIFIED LIVE** — https://wedding-seating-ymzs.onrender.com
+**SHIPPED & VERIFIED LIVE (auth-gated)** — https://wedding-seating-ymzs.onrender.com — invite-only Google sign-in via factory-auth (Brief 003); pending final owner Google-login check
 
 Pipeline: intake → design-brief → spec-and-plan → build → local preflight (e2e green) →
 push (public GitHub) → Render deploy (free Node web + dedicated `wedding-seating-db`
