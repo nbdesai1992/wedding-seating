@@ -3,6 +3,9 @@
 const path = require('path');
 const express = require('express');
 const multer = require('multer');
+const cookieParser = require('cookie-parser');
+const db = require('./db');
+const auth = require('./auth');
 const repo = require('./repo');
 const { guestsFromCsv, toCsv } = require('./csv');
 
@@ -18,8 +21,18 @@ function asyncH(fn) {
 function createApp() {
   const app = express();
   app.use(express.json());
+  app.use(cookieParser());
 
+  // ---- open endpoints: health, auth flow, and login-page assets ----
   app.get('/healthz', (req, res) => res.json({ ok: true }));
+
+  auth.routes(app); // GET/POST /login, GET /auth/callback, POST /logout
+
+  const pub = path.join(__dirname, '..', 'public');
+  app.get('/styles.css', (req, res) => res.sendFile(path.join(pub, 'styles.css')));
+
+  // ---- everything below requires an active member of this app ----
+  app.use(auth.requireMember(db));
 
   // ---- events ----
   app.get('/api/events', asyncH(async (req, res) => {

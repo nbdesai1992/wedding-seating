@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>By invitation — Seat &amp; Celebrate</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;1,500&family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/styles.css" />
+  <style>
+    .auth-wrap{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:28px}
+    .auth-card{background:#fff;border:1px solid var(--line);border-radius:var(--radius-lg);box-shadow:var(--shadow);padding:48px 44px;max-width:460px;width:100%;text-align:center}
+    .auth-card .orn{color:var(--gold);letter-spacing:.6em;font-size:15px}
+    .auth-card h1{font-family:'Cormorant Garamond',Georgia,serif;font-weight:600;font-size:34px;margin:12px 0 6px}
+    .auth-card p{color:var(--muted);font-size:15px;line-height:1.6;margin:0 0 10px}
+    .who{font-size:13px;color:var(--muted);margin:18px 0 24px}
+    .who b{color:var(--ink);font-weight:600}
+    .signout{background:none;border:none;padding:0;color:var(--sage-deep);font-size:13.5px;text-decoration:underline;cursor:pointer}
+  </style>
+</head>
+<body>
+  <div class="auth-wrap">
+    <div class="auth-card">
+      <div class="orn">&#10086; &#10086; &#10086;</div>
+      <h1>This celebration is by invitation</h1>
+      <p>Access to this planner is by invitation only. If you&rsquo;re expecting a place here, ask the host to add you to the guest list.</p>
+      <div class="who">Signed in as <b>{{EMAIL}}</b></div>
+      <form method="post" action="/logout">
+        <button type="submit" class="signout">Sign out and use a different account</button>
+      </form>
+    </div>
+  </div>
+</body>
+</html>

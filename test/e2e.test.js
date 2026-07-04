@@ -4,6 +4,12 @@
 // Postgres so it needs no external database. Covers the full acceptance path:
 // create event -> add tables -> import guests CSV -> assign -> export CSV.
 
+// Auth gate (SPEC-003): run the suite through the explicit test hook — the
+// bypass is only honored under NODE_ENV=test and still checks app_members.
+process.env.NODE_ENV = 'test';
+process.env.AUTH_BYPASS = '1';
+const MEMBER = 'nbdesai1992@gmail.com'; // seeded by migration 004
+
 const test = require('node:test');
 const assert = require('node:assert');
 const { newDb } = require('pg-mem');
@@ -22,7 +28,7 @@ let base;
 let server;
 
 async function req(method, path, body, headers) {
-  const opts = { method, headers: headers || {} };
+  const opts = { method, headers: { 'x-test-email': MEMBER, ...(headers || {}) } };
   if (body !== undefined) {
     opts.headers['Content-Type'] = 'application/json';
     opts.body = JSON.stringify(body);
@@ -142,7 +148,7 @@ test('full seating flow: create -> tables -> import -> assign -> export', async 
   assert.equal(ev.fixtures.length, 1, 'fixture delete persisted');
 
   // 5. export CSV reflects assignments
-  const exp = await fetch(`${base}/api/events/${eventId}/export.csv`);
+  const exp = await fetch(`${base}/api/events/${eventId}/export.csv`, { headers: { 'x-test-email': MEMBER } });
   assert.equal(exp.status, 200);
   assert.match(exp.headers.get('content-type'), /text\/csv/);
   const text = await exp.text();
