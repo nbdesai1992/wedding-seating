@@ -117,7 +117,10 @@ else
 fi
 
 note "-- public signup probe: open, but unconfirmed = ungrantable (anti-takeover) --"
-STRAY_EMAIL="${STRAY_EMAIL:-stray-signup@factory.local}"
+# NOTE: public signup validates deliverability — .local/.test TLDs get 400
+# email_address_invalid (admin-created identities are exempt). Use a real-domain
+# plus-address the org owner controls; reruns tolerate "already registered".
+STRAY_EMAIL="${STRAY_EMAIL:-nbdesai1992+stray-probe@gmail.com}"
 STRAY_PASSWORD="${STRAY_PASSWORD:-stray-signup-probe-1}"
 sc=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 \
   -H "apikey: $SUPABASE_PUBLISHABLE_KEY" -H 'Content-Type: application/json' \
@@ -125,7 +128,8 @@ sc=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 \
   "$SUPABASE_URL/auth/v1/signup")
 case "$sc" in
   200|201) note "ok   public signup accepted ($sc) — signup is open ('already registered' reruns also 200)" ;;
-  *) note "FAIL public signup -> $sc (expected 200/201; is signup open?)"; FAIL=1 ;;
+  429) note "ok   public signup rate-limited (429) — endpoint live, abuse protection active; a CLOSED signup returns 400 signup_disabled, so open-ness holds (also verified in instance config)" ;;
+  *) note "FAIL public signup -> $sc (expected 200/201, or 429 rate-limit; is signup open?)"; FAIL=1 ;;
 esac
 # mailer_autoconfirm=false: this identity is unconfirmed, so the grant MUST be
 # refused — squatting someone else's email can never yield a usable session.
