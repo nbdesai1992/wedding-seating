@@ -92,3 +92,24 @@ they are the first thing guests-of-the-tool see, so they must not feel bolted-on
 - The Google sign-in action is the single obvious element on the login page.
 - 403 page shows the invitation message + signed-in email + working sign-out, styled.
 - No unstyled flash or layout jump between login/403 and the app shell.
+
+## 10. Guest-list admin panel (change 004 — added 2026-07-04)
+
+Admin-only surface inside the app shell, same warm-elegant language (§6). Primary
+device: the owner's phone — 390px is the first-class layout, desktop the second.
+
+- **Entry:** a quiet "Guest list" affordance near the signed-in header identity,
+  visible ONLY to admins. Members never see it.
+- **Panel:** member rows (email, role chip, status) + one invite field with a single
+  clear action. Invite success states plainly: "Invited — ask them to sign in with
+  Google." Block/remove per row, understated, with the last-admin protected state
+  communicated gracefully (control disabled with a one-line why, not an error).
+- **Tone:** guest-list of a celebration, not a user-management console. No tables that
+  read as admin dashboards; card/list language consistent with the app.
+
+### Visual rubric additions (ui-verify)
+- Panel styled to the app (fonts/palette/cards) at 390px AND desktop; no dashboard feel.
+- "Guest list" entry visible for admin, absent for plain member (two frames).
+- Invite flow shows the post-invite message clearly at 390px.
+- Role/status are scannable per row (chips/labels), block/remove present but quiet.
+- Last-admin protection state renders as a graceful disabled control with explanation.
