@@ -16,6 +16,10 @@ services:
     envVars:
       - key: NODE_VERSION
         value: "20.18.0"
+      # Express production defaults; nothing else in the app keys off
+      # NODE_ENV=production (the auth test bypass requires NODE_ENV=test).
+      - key: NODE_ENV
+        value: "production"
       - key: DATABASE_URL
         sync: false
       # Auth gate (BRIEF-003): org login via factory-auth. Values set via API at

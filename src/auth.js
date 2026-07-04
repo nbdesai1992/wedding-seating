@@ -154,8 +154,14 @@ function requireMember(db) {
       }
 
       const m = await db.query(
-        "SELECT role FROM app_members WHERE email = $1 AND status = 'active'", [email]);
+        "SELECT role, joined_at FROM app_members WHERE email = $1 AND status = 'active'", [email]);
       if (m.rows.length === 0) return forbidden(req, res, email);
+      // first authenticated request ever → invited becomes joined (one write
+      // per member lifetime; the guard keeps every later request write-free)
+      if (m.rows[0].joined_at == null) {
+        await db.query(
+          'UPDATE app_members SET joined_at = now() WHERE email = $1 AND joined_at IS NULL', [email]);
+      }
       req.user = { email, role: m.rows[0].role };
       next();
     } catch (err) {

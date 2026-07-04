@@ -40,6 +40,10 @@ input:focus,select:focus{outline:none;border-color:var(--blush-deep);box-shadow:
 .whoami a:hover{color:var(--sage-deep)}
 .gl-link{color:var(--muted);font-size:12.5px;text-decoration:underline;cursor:pointer;white-space:nowrap}
 .gl-link:hover{color:var(--sage-deep)}
+/* stacked phone topbar: the entry reads as an action chip, not a subtitle line */
+@media (max-width:560px){
+  .gl-link{margin-top:9px;padding:5px 13px;border:1px solid var(--line);border-radius:999px;background:#fff;text-decoration:none;color:var(--sage-deep)}
+}
 
 /* ---------- guest list panel (admins; 390px first-class) ---------- */
 .gl-sub{color:var(--muted);font-size:13.5px;margin:14px 2px}
@@ -51,17 +55,25 @@ input:focus,select:focus{outline:none;border-color:var(--blush-deep);box-shadow:
 .gl-note{margin-top:12px;font-size:13.5px;color:var(--sage-deep);background:var(--sage-tint);border-radius:11px;padding:9px 13px}
 .gl-note.err{color:#a5655c;background:var(--blush-tint)}
 #gl-rows{margin-top:18px}
-.gl-row{display:flex;flex-direction:column;gap:8px;padding:13px 2px;border-top:1px solid var(--line)}
+.gl-row{display:flex;flex-direction:column;gap:8px;padding:13px 6px;border-top:1px solid var(--line)}
 @media (min-width:640px){.gl-row{flex-direction:row;align-items:center;gap:14px}}
 .gl-row.blocked .gl-mail{color:var(--muted)}
+.gl-row.new{border-radius:10px;animation:gl-new 3s ease-out 1}
+@keyframes gl-new{0%{background:var(--sage-tint)}100%{background:transparent}}
 .gl-who{flex:1;min-width:0}
 .gl-mail{font-size:14.5px;word-break:break-all}
 .gl-meta{color:var(--muted);font-size:12px;margin-top:2px}
-.gl-chips{display:flex;gap:6px;flex-wrap:wrap}
-.chip.plain{color:var(--muted);background:var(--ivory);border:1px solid var(--line)}
-.gl-acts{display:flex;gap:14px;align-items:center}
-.gl-act{color:var(--muted);font-size:12.5px;text-decoration:underline;cursor:pointer}
+.gl-chips{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.chip.plain{color:#6f6459;background:#f2eadf;border:1px solid #d9cbba}
+.gl-status{color:var(--muted);font-size:12px;font-style:italic}
+.gl-acts{display:flex;flex-direction:column;gap:3px;align-items:flex-start}
+.gl-btns{display:flex;gap:14px;align-items:center}
+/* desktop: fixed-width right-aligned action column keeps row rhythm even when
+   a blocked row's action cluster is wider */
+@media (min-width:640px){.gl-acts{width:172px;flex:none;align-items:flex-end}}
+.gl-act{color:var(--muted);font-size:12.5px;text-decoration:underline;cursor:pointer;white-space:nowrap}
 .gl-act:hover{color:#b9645a}
+.gl-act.disabled{color:#cdc3b7;text-decoration-style:dotted;cursor:default;pointer-events:none}
 .gl-why{color:var(--muted);font-size:12px;font-style:italic}
 .hero{text-align:center;padding:44px 0 40px}
 .hero .orn{color:var(--gold);letter-spacing:.6em;font-size:16px;text-transform:uppercase}

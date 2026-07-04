@@ -222,21 +222,30 @@ test('gate: /api/me -> 401 unauth, 200 with email for a member', async () => {
 const ADMIN = MEMBER; // seeded owner; role=admin since migration 005
 
 test('admin: invite -> immediate access, duplicate 409, block/unblock/remove live', async () => {
-  // invite (mixed case in, lowercase stored, provenance recorded)
-  let r = await req('POST', '/api/admin/members', { email: 'Guest.One@Example.com' });
+  // invite (mixed case in, lowercase stored, provenance recorded; a role
+  // field is IGNORED — invited rows are always plain members)
+  let r = await req('POST', '/api/admin/members', { email: 'Guest.One@Example.com', role: 'admin' });
   assert.equal(r.status, 201);
   assert.equal(r.data.email, 'guest.one@example.com', 'email lowercased');
-  assert.equal(r.data.role, 'member');
+  assert.equal(r.data.role, 'member', 'invite never grants a role');
   assert.equal(r.data.invited_by, ADMIN, 'provenance recorded');
+  assert.equal(r.data.joined_at, null, 'invited, never signed in');
+
+  // pending vs joined: invited until their first request, joined after
+  let list = (await req('GET', '/api/admin/members')).data;
+  assert.equal(list.find((m) => m.email === 'guest.one@example.com').joined, false, 'still pending');
 
   // invited email gets in immediately — no redeploy, next request
   const guestH = { 'x-test-email': 'guest.one@example.com' };
   assert.equal((await req('GET', '/api/events', undefined, guestH)).status, 200);
 
+  list = (await req('GET', '/api/admin/members')).data;
+  assert.equal(list.find((m) => m.email === 'guest.one@example.com').joined, true, 'first request stamped joined_at');
+
   // duplicate invite → friendly 409
   r = await req('POST', '/api/admin/members', { email: 'guest.one@example.com' });
   assert.equal(r.status, 409);
-  assert.match(r.data.message, /already on the list/);
+  assert.match(r.data.message, /already on the list\./);
 
   // invalid email → 400
   assert.equal((await req('POST', '/api/admin/members', { email: 'not-an-email' })).status, 400);
@@ -247,11 +256,17 @@ test('admin: invite -> immediate access, duplicate 409, block/unblock/remove liv
   const own = r.data.find((m) => m.email === ADMIN);
   assert.equal(own.isSelf, true);
   assert.equal(own.isLastAdmin, true, 'seed is the only active admin');
+  assert.equal(own.joined, true, 'owner seeded as joined by migration 005');
   assert.equal(r.data.find((m) => m.email === 'guest.one@example.com').isLastAdmin, false);
 
-  // block → immediate 403; unblock → immediate access; remove → 403 again
+  // block → immediate 403; duplicate invite of a blocked row says so
   assert.equal((await req('PATCH', '/api/admin/members/guest.one@example.com', { status: 'blocked' })).status, 200);
   assert.equal((await req('GET', '/api/events', undefined, guestH)).status, 403);
+  r = await req('POST', '/api/admin/members', { email: 'guest.one@example.com' });
+  assert.equal(r.status, 409);
+  assert.match(r.data.message, /blocked — use welcome back/);
+
+  // unblock → immediate access; remove → 403 again
   assert.equal((await req('PATCH', '/api/admin/members/guest.one@example.com', { status: 'active' })).status, 200);
   assert.equal((await req('GET', '/api/events', undefined, guestH)).status, 200);
   assert.equal((await req('DELETE', '/api/admin/members/guest.one@example.com')).status, 200);
@@ -289,8 +304,12 @@ test('rails: last-admin demote/block/remove and self-block/remove -> 4xx', async
   r = await req('DELETE', `/api/admin/members/${ADMIN}`);
   assert.ok(r.status === 400 || r.status === 409, 'last-admin/self remove refused');
 
-  // with a second active admin the last-admin rail lifts, self rails stay
-  assert.equal((await req('POST', '/api/admin/members', { email: 'second.admin@example.com', role: 'admin' })).status, 201);
+  // with a second active admin the last-admin rail lifts, self rails stay.
+  // (invite can't grant admin — promote via PATCH after inviting)
+  const inv = await req('POST', '/api/admin/members', { email: 'second.admin@example.com', role: 'admin' });
+  assert.equal(inv.status, 201);
+  assert.equal(inv.data.role, 'member', 'role field on invite is ignored');
+  assert.equal((await req('PATCH', '/api/admin/members/second.admin@example.com', { role: 'admin' })).status, 200);
   r = await req('PATCH', `/api/admin/members/${ADMIN}`, { status: 'blocked' });
   assert.equal(r.status, 400, 'self-block refused even with two admins');
   assert.equal(r.data.error, 'self_block');

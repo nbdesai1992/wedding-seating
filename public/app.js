@@ -665,9 +665,11 @@ $('#import-file').addEventListener('change', async (e) => {
 });
 
 // ---------- session (quiet whoami in the header) ----------
+let ME = null; // {email, role} for the signed-in member
 async function loadWhoami() {
   try {
     const me = await api('GET', '/api/me');
+    ME = me;
     const box = $('#whoami');
     box.textContent = '';
     box.append(`signed in as ${me.email} · `);
@@ -701,24 +703,30 @@ function glRow(m) {
 
   const who = el('div', 'gl-who');
   who.append(el('div', 'gl-mail', m.email));
-  if (m.invited_by) who.append(el('div', 'gl-meta', `invited by ${m.invited_by}`));
+  if (m.invited_by) {
+    const by = ME && m.invited_by === ME.email ? 'you' : m.invited_by;
+    who.append(el('div', 'gl-meta', `invited by ${by}`));
+  }
 
   const chips = el('div', 'gl-chips');
   chips.append(el('span', m.role === 'admin' ? 'chip' : 'chip plain', m.role));
+  chips.append(el('span', 'gl-status', m.joined ? 'joined' : 'invited'));
   if (m.status === 'blocked') chips.append(el('span', 'chip rose', 'blocked'));
 
   const acts = el('div', 'gl-acts');
-  if (m.isLastAdmin) {
-    acts.append(el('span', 'gl-why', 'the last admin stays'));
-  } else if (m.isSelf) {
-    acts.append(el('span', 'gl-why', 'that’s you'));
+  const btns = el('div', 'gl-btns');
+  if (m.isLastAdmin || m.isSelf) {
+    // protected rows keep the controls visible but plainly disabled,
+    // captioned with the one-line why
+    btns.append(el('span', 'gl-act disabled', 'block'), el('span', 'gl-act disabled', 'remove'));
+    acts.append(btns, el('div', 'gl-why', m.isLastAdmin ? 'the last admin stays' : 'that’s you'));
   } else {
     if (m.status === 'blocked') {
-      acts.append(glAction('welcome back', () => glPatch(m.email, { status: 'active' }, `${m.email} is welcome again.`)));
+      btns.append(glAction('welcome back', () => glPatch(m.email, { status: 'active' }, `${m.email} is welcome again.`)));
     } else {
-      acts.append(glAction('block', () => glPatch(m.email, { status: 'blocked' }, `${m.email} can no longer sign in.`)));
+      btns.append(glAction('block', () => glPatch(m.email, { status: 'blocked' }, `${m.email} can no longer sign in.`)));
     }
-    acts.append(glAction('remove', async () => {
+    btns.append(glAction('remove', async () => {
       if (!confirm(`Remove ${m.email} from the guest list?`)) return;
       try {
         await api('DELETE', `/api/admin/members/${encodeURIComponent(m.email)}`);
@@ -726,6 +734,7 @@ function glRow(m) {
         await loadMembers();
       } catch (e) { glNote(e.message, true); }
     }));
+    acts.append(btns);
   }
 
   row.append(who, chips, acts);
@@ -740,11 +749,21 @@ async function glPatch(email, body, doneMsg) {
   } catch (e) { glNote(e.message, true); }
 }
 
-async function loadMembers() {
+async function loadMembers(highlight) {
   const members = await api('GET', '/api/admin/members');
+  if (highlight) {
+    // freshly invited row surfaces at the top, gently highlighted, so the
+    // success note and the new row are visible together on a phone
+    const i = members.findIndex((m) => m.email === highlight);
+    if (i > 0) members.unshift(members.splice(i, 1)[0]);
+  }
   const box = $('#gl-rows');
   box.textContent = '';
-  members.forEach((m) => box.append(glRow(m)));
+  members.forEach((m) => {
+    const r = glRow(m);
+    if (m.email === highlight) r.classList.add('new');
+    box.append(r);
+  });
 }
 
 $('#gl-link').addEventListener('click', async () => {
@@ -760,13 +779,13 @@ $('#gl-link').addEventListener('click', async () => {
 $('#gl-form').addEventListener('submit', async (e) => {
   e.preventDefault();
   const input = $('#gl-email');
-  const email = input.value.trim();
+  const email = input.value.trim().toLowerCase();
   if (!email) return;
   try {
     await api('POST', '/api/admin/members', { email });
     glNote('Invited — ask them to sign in with Google.');
     input.value = '';
-    await loadMembers();
+    await loadMembers(email);
   } catch (err) { glNote(err.message, true); }
 });
 

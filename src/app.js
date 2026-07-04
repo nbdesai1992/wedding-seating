@@ -39,7 +39,7 @@ function createApp() {
 
   // ---- guest-list admin (SPEC-004 R2/R3; role checked per request) ----
   const EMAIL_RE = /^[a-z0-9][a-z0-9._%+-]*@[a-z0-9-]+(\.[a-z0-9-]+)+$/;
-  const MEMBER_COLS = 'email, role, status, invited_by, invited_at';
+  const MEMBER_COLS = 'email, role, status, invited_by, invited_at, joined_at';
   // rails throw this from inside the transaction; the route turns it into 4xx
   function rail(status, body) {
     const e = new Error(body.error);
@@ -50,34 +50,49 @@ function createApp() {
     if (err.rail) return res.status(err.rail.status).json(err.rail.body);
     throw err;
   }
+  // Locks the active-admin rows so two concurrent admin-losing mutations
+  // serialize instead of both counting 2 and leaving zero admins.
+  async function lockedActiveAdminCount(client) {
+    const r = await client.query(
+      "SELECT email FROM app_members WHERE role = 'admin' AND status = 'active' FOR UPDATE");
+    return r.rows.length;
+  }
+  const memberJson = (viewerEmail, activeAdmins) => (r) => ({
+    ...r,
+    joined: r.joined_at != null,
+    isSelf: r.email === viewerEmail,
+    isLastAdmin: r.role === 'admin' && r.status === 'active' && activeAdmins === 1,
+  });
 
   app.get('/api/admin/members', auth.requireAdmin, asyncH(async (req, res) => {
     const { rows } = await db.query(
       `SELECT ${MEMBER_COLS} FROM app_members ORDER BY invited_at, email`);
     const activeAdmins = rows.filter((r) => r.role === 'admin' && r.status === 'active').length;
-    res.json(rows.map((r) => ({
-      ...r,
-      isSelf: r.email === req.user.email,
-      isLastAdmin: r.role === 'admin' && r.status === 'active' && activeAdmins === 1,
-    })));
+    res.json(rows.map(memberJson(req.user.email, activeAdmins)));
   }));
 
+  // Invites are always plain members — no role field accepted (a typo'd
+  // "admin" invite must never satisfy the last-admin count while its owner
+  // has not even signed in). Promotion is a PATCH after they join.
   app.post('/api/admin/members', auth.requireAdmin, asyncH(async (req, res) => {
     const email = String(req.body?.email || '').trim().toLowerCase();
-    const role = req.body?.role === 'admin' ? 'admin' : 'member';
     if (!EMAIL_RE.test(email)) {
       return res.status(400).json({ error: 'invalid_email', message: 'That doesn’t look like an email address.' });
     }
     // explicit pre-check for the 409 (pg-mem mishandles ON CONFLICT+RETURNING);
     // ON CONFLICT stays as race-safety on real Postgres.
-    const dup = await db.query('SELECT 1 FROM app_members WHERE email = $1', [email]);
+    const dup = await db.query('SELECT status FROM app_members WHERE email = $1', [email]);
     if (dup.rows.length > 0) {
-      return res.status(409).json({ error: 'already_member', message: `${email} is already on the list.` });
+      const blocked = dup.rows[0].status === 'blocked';
+      return res.status(409).json({
+        error: 'already_member',
+        message: `${email} is already on the list${blocked ? ' (blocked — use welcome back)' : ''}.`,
+      });
     }
     const ins = await db.query(
-      `INSERT INTO app_members (email, role, invited_by) VALUES ($1, $2, $3)
+      `INSERT INTO app_members (email, role, invited_by) VALUES ($1, 'member', $2)
        ON CONFLICT (email) DO NOTHING RETURNING ${MEMBER_COLS}`,
-      [email, role, req.user.email]);
+      [email, req.user.email]);
     if (ins.rows.length === 0) {
       return res.status(409).json({ error: 'already_member', message: `${email} is already on the list.` });
     }
@@ -110,9 +125,7 @@ function createApp() {
           ((patch.role !== undefined && patch.role !== 'admin') ||
            (patch.status !== undefined && patch.status !== 'active'));
         if (losesAdmin) {
-          const c = await client.query(
-            "SELECT count(*) AS n FROM app_members WHERE role = 'admin' AND status = 'active'");
-          if (Number(c.rows[0].n) <= 1) {
+          if (await lockedActiveAdminCount(client) <= 1) {
             throw rail(409, { error: 'last_admin', message: 'The last admin stays — promote someone else first.' });
           }
         }
@@ -135,9 +148,7 @@ function createApp() {
         const cur = await client.query('SELECT role, status FROM app_members WHERE email = $1', [target]);
         if (cur.rows.length === 0) throw rail(404, { error: 'not_found' });
         if (cur.rows[0].role === 'admin' && cur.rows[0].status === 'active') {
-          const c = await client.query(
-            "SELECT count(*) AS n FROM app_members WHERE role = 'admin' AND status = 'active'");
-          if (Number(c.rows[0].n) <= 1) {
+          if (await lockedActiveAdminCount(client) <= 1) {
             throw rail(409, { error: 'last_admin', message: 'The last admin stays — promote someone else first.' });
           }
         }
