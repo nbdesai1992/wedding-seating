@@ -208,3 +208,27 @@ test('gate: seeded member still has full access (data intact)', async () => {
   assert.equal(r.status, 200);
   assert.ok(Array.isArray(r.data) && r.data.length >= 1, 'member sees existing events');
 });
+
+test('gate: /api/me -> 401 unauth, 200 with email for a member', async () => {
+  const unauth = await fetch(`${base}/api/me`);
+  assert.equal(unauth.status, 401);
+
+  const me = await req('GET', '/api/me');
+  assert.equal(me.status, 200);
+  assert.deepEqual(me.data, { email: MEMBER });
+});
+
+test('gate: auth callback provider-error / missing-code -> gentle login notice', async () => {
+  const err = await fetch(`${base}/auth/callback?error=access_denied`, { redirect: 'manual' });
+  assert.equal(err.status, 302);
+  assert.equal(err.headers.get('location'), '/login?err=invite');
+
+  const noCode = await fetch(`${base}/auth/callback`, { redirect: 'manual' });
+  assert.equal(noCode.status, 302);
+  assert.equal(noCode.headers.get('location'), '/login?err=invite');
+
+  // the login page carries the styled notice + the script that reveals it
+  const login = await (await fetch(`${base}/login`)).text();
+  assert.match(login, /err-note/, 'login page contains the invite notice element');
+  assert.match(login, /doesn&rsquo;t have an invitation yet/, 'notice copy present');
+});

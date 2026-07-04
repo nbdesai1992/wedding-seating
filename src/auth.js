@@ -39,8 +39,19 @@ function bypassActive() {
 }
 
 function setSessionCookies(res, tokens) {
-  res.cookie('sb_at', tokens.access_token, cookieOpts());
-  res.cookie('sb_rt', tokens.refresh_token, cookieOpts());
+  // maxAge keeps the session across browser restarts: access token 1h
+  // (refreshed as needed), refresh token 30d.
+  res.cookie('sb_at', tokens.access_token, cookieOpts({ maxAge: 60 * 60 * 1000 }));
+  res.cookie('sb_rt', tokens.refresh_token, cookieOpts({ maxAge: 30 * 24 * 60 * 60 * 1000 }));
+}
+
+// Static-asset requests (anything with a non-.html file extension, e.g.
+// /app.js) never trigger a refresh-token grant: a cold page load fires them
+// in parallel and N simultaneous refreshes would race token rotation.
+// Only the document/API request refreshes; assets retry with the new cookie.
+function isStaticAssetPath(p) {
+  const ext = path.extname(p);
+  return ext !== '' && ext !== '.html';
 }
 
 // ---- routes: login page, PKCE start, callback, logout ----
@@ -66,6 +77,10 @@ function routes(app) {
   });
 
   app.get('/auth/callback', async (req, res) => {
+    // Provider error or missing code (e.g. user cancelled at Google, or the
+    // hosted-auth screen rejected the account) → back to login with a gentle
+    // notice, never a 500 or a silent bounce.
+    if (req.query.error || !req.query.code) return res.redirect('/login?err=invite');
     try {
       const r = await fetch(`${process.env.SUPABASE_URL}/auth/v1/token?grant_type=pkce`, {
         method: 'POST',
@@ -119,7 +134,10 @@ function requireMember(db) {
         try {
           ({ payload } = await jwtVerify(req.cookies.sb_at, getJwks()));
         } catch {
-          // expired/missing access token → one refresh attempt
+          // expired/missing access token → one refresh attempt, but only for
+          // document/API requests — parallel static-asset requests must not
+          // race refresh-token rotation on a cold page load.
+          if (isStaticAssetPath(req.path)) return unauthorized(req, res);
           if (!req.cookies.sb_rt) return unauthorized(req, res);
           const r = await fetch(`${process.env.SUPABASE_URL}/auth/v1/token?grant_type=refresh_token`, {
             method: 'POST',

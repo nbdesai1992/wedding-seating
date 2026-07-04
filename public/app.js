@@ -664,5 +664,22 @@ $('#import-file').addEventListener('change', async (e) => {
   e.target.value = '';
 });
 
+// ---------- session (quiet whoami in the header) ----------
+async function loadWhoami() {
+  try {
+    const me = await api('GET', '/api/me');
+    const box = $('#whoami');
+    box.textContent = '';
+    box.append(`signed in as ${me.email} · `);
+    const out = el('a', null, 'sign out');
+    out.addEventListener('click', async () => {
+      try { await fetch('/logout', { method: 'POST' }); } catch (_) {}
+      location.href = '/login';
+    });
+    box.append(out);
+  } catch (_) { /* not signed in (test/bypass edge) — leave header quiet */ }
+}
+loadWhoami();
+
 // ---------- go ----------
 route();

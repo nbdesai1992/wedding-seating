@@ -34,6 +34,9 @@ function createApp() {
   // ---- everything below requires an active member of this app ----
   app.use(auth.requireMember(db));
 
+  // ---- session ----
+  app.get('/api/me', (req, res) => res.json({ email: req.user.email }));
+
   // ---- events ----
   app.get('/api/events', asyncH(async (req, res) => {
     res.json(await repo.listEvents());

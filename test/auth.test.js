@@ -84,3 +84,37 @@ test('bypass is dead outside NODE_ENV=test', async () => {
     process.env.NODE_ENV = prev;
   }
 });
+
+test('static-asset paths never attempt the refresh grant; documents do', async () => {
+  const prevEnv = { NODE_ENV: process.env.NODE_ENV, SUPABASE_URL: process.env.SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY: process.env.SUPABASE_PUBLISHABLE_KEY };
+  const realFetch = global.fetch;
+  const refreshCalls = [];
+  process.env.NODE_ENV = 'production'; // real verify path, not the bypass
+  process.env.SUPABASE_URL = 'https://example.invalid';
+  process.env.SUPABASE_PUBLISHABLE_KEY = 'pk-test';
+  // intercept only token-grant calls; pass everything else (our own test
+  // requests) through to the real fetch
+  global.fetch = (url, opts) => {
+    if (String(url).includes('/auth/v1/token')) {
+      refreshCalls.push(String(url));
+      return Promise.resolve({ ok: false });
+    }
+    return realFetch(url, opts);
+  };
+  try {
+    const cookies = { Cookie: 'sb_at=not-a-jwt; sb_rt=some-refresh-token' };
+    // static asset (non-.html extension): bad token → straight to unauthorized
+    const asset = await get('/assets/app.js', cookies);
+    assert.equal(asset.status, 302, 'asset request redirected');
+    assert.equal(refreshCalls.length, 0, 'no refresh grant fired for a static asset');
+    // document request: the one refresh attempt IS made (and fails → 302)
+    const page = await get('/page', cookies);
+    assert.equal(page.status, 302);
+    assert.equal(refreshCalls.length, 1, 'exactly one refresh grant for the document');
+  } finally {
+    global.fetch = realFetch;
+    for (const [k, v] of Object.entries(prevEnv)) {
+      if (v === undefined) delete process.env[k]; else process.env[k] = v;
+    }
+  }
+});

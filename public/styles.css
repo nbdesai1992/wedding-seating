@@ -35,6 +35,9 @@ input:focus,select:focus{outline:none;border-color:var(--blush-deep);box-shadow:
 .brand{font-family:'Cormorant Garamond',serif;font-weight:600;font-size:27px;letter-spacing:.3px;white-space:nowrap}
 .brand .amp{color:var(--blush-deep);font-style:italic}
 .tag{color:var(--muted);font-size:13px}
+.whoami{color:var(--muted);font-size:12.5px;white-space:nowrap}
+.whoami a{color:var(--muted);text-decoration:underline;cursor:pointer}
+.whoami a:hover{color:var(--sage-deep)}
 .hero{text-align:center;padding:44px 0 40px}
 .hero .orn{color:var(--gold);letter-spacing:.6em;font-size:16px;text-transform:uppercase}
 .hero h1{font-family:'Cormorant Garamond',serif;font-weight:600;font-size:54px;margin:10px 0 8px}
