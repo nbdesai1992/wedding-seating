@@ -4,3 +4,10 @@ node_modules/
 *.log
 npm-debug.log*
 .DS_Store
+
+# Orchestration (added by software-factory)
+session/
+.claude/settings.local.json
+.claude/.turn-marker
+.env.local
+*.env.local

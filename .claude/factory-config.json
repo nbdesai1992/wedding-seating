@@ -1,0 +1,17 @@
+{
+  "project_name": "wedding-seating",
+  "project_slug": "wedding-seating",
+  "project_description": "Elegant frontend-only wedding seating planner: room layout with tables and fixtures, drag-and-drop guest seating, CSV import, all persisted in the browser (localStorage). No backend, no database, no login.",
+  "domain": "weddings & events",
+  "frontend_framework": "static-html",
+  "backend_framework": "none",
+  "database": "none",
+  "deploy_platform": "render",
+  "env_group_name": "general_builder_keys",
+  "render_workspace": "nealdes.ai",
+  "auth_provider": "none",
+  "design_context": "Editorial fine-stationery feel carried by the planner palette: rose/cream/gold/warm-gray, Playfair Display headings + Inter body. Calm, low-density, ornamental dividers, pill controls, warm shadows. Never generic SaaS, never the old blush/sage hues.",
+  "dev_server_port": 3000,
+  "dev_server_command": "npx serve public -l 3000",
+  "testing_policy": "local"
+}
