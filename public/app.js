@@ -4,20 +4,6 @@
 const $ = (sel, root = document) => root.querySelector(sel);
 const el = (tag, cls, txt) => { const e = document.createElement(tag); if (cls) e.className = cls; if (txt != null) e.textContent = txt; return e; };
 
-async function api(method, url, body, isForm) {
-  const opts = { method, headers: {} };
-  if (isForm) opts.body = body;
-  else if (body !== undefined) { opts.headers['Content-Type'] = 'application/json'; opts.body = JSON.stringify(body); }
-  const res = await fetch(url, opts);
-  if (!res.ok) {
-    let msg = res.statusText;
-    try { const j = await res.json(); msg = j.message || j.error || msg; } catch (_) {}
-    throw new Error(msg);
-  }
-  const ct = res.headers.get('content-type') || '';
-  return ct.includes('application/json') ? res.json() : res.text();
-}
-
 let toastTimer;
 function toast(msg, isErr) {
   const t = $('#toast');
@@ -82,7 +68,7 @@ function newEventForm() {
     const name = $('#ev-name', card).value.trim();
     if (!name) { toast('Give it a name first', true); return; }
     try {
-      const ev = await api('POST', '/api/events', {
+      const ev = await Store.createEvent({
         name, event_date: $('#ev-date', card).value || null, venue: $('#ev-venue', card).value.trim() || null,
       });
       toast('Celebration created');
@@ -101,7 +87,7 @@ async function loadEvents() {
   grid.innerHTML = '';
   grid.appendChild(newEventCard());
   let events = [];
-  try { events = await api('GET', '/api/events'); }
+  try { events = await Store.listEvents(); }
   catch (e) { grid.appendChild(el('div', 'empty-note', 'Could not load celebrations.')); return; }
   for (const ev of events) {
     const seated = parseInt(ev.seated_count ?? 0, 10);
@@ -132,12 +118,11 @@ async function loadEvents() {
 
 // ---------- event ----------
 async function openEvent(id) {
-  try { current = await api('GET', `/api/events/${id}`); }
+  try { current = await Store.getEvent(id); }
   catch (e) { toast('Celebration not found', true); location.hash = ''; return; }
   showEvent();
   $('#event-title').textContent = current.name;
   $('#event-meta').textContent = [fmtDate(current.event_date), current.venue].filter(Boolean).join(' · ') || 'date to be set';
-  $('#export-btn').setAttribute('href', `/api/events/${current.id}/export.csv`);
   const cw = $('#canvas').getBoundingClientRect().width;
   zoom = cw < 700 ? Math.max(0.42, cw / 840) : 1;   // fit-to-room on small viewports
   applyZoom();
@@ -383,7 +368,7 @@ async function seatParty(name, members) {
   try {
     const seats = free(target);
     for (let i = 0; i < members.length; i++) {
-      await api('PATCH', `/api/guests/${members[i].id}`, { table_id: target.id, seat_index: seats[i] });
+      await Store.updateGuest(members[i].id, { table_id: target.id, seat_index: seats[i] });
     }
     await refresh();
     savedBlip();
@@ -412,7 +397,7 @@ function startTableDrag(e, node, table) {
     document.removeEventListener('pointerup', up);
     node.classList.remove('dragging');
     if (moved) {
-      try { await api('PATCH', `/api/tables/${table.id}`, { x: table.x, y: table.y }); savedBlip(); }
+      try { await Store.updateTable(table.id, { x: table.x, y: table.y }); savedBlip(); }
       catch (err) { toast('Could not save position', true); }
     }
   }
@@ -452,11 +437,11 @@ function startGuestDrag(e, guestId) {
     const overPanel = u && u.closest && u.closest('#guests-panel');
     try {
       if (seat && seat.dataset.tableId) {
-        await api('PATCH', `/api/guests/${guestId}`, { table_id: seat.dataset.tableId, seat_index: parseInt(seat.dataset.seat, 10) });
+        await Store.updateGuest(guestId, { table_id: seat.dataset.tableId, seat_index: parseInt(seat.dataset.seat, 10) });
         await refresh(); savedBlip();
         toast(`${firstName(guest.name)} seated`);
       } else if (overPanel && guest.table_id) {
-        await api('PATCH', `/api/guests/${guestId}`, { table_id: null, seat_index: null });
+        await Store.updateGuest(guestId, { table_id: null, seat_index: null });
         await refresh(); savedBlip();
         toast(`${firstName(guest.name)} unseated`);
       }
@@ -467,7 +452,7 @@ function startGuestDrag(e, guestId) {
 }
 
 async function refresh() {
-  const fresh = await api('GET', `/api/events/${current.id}`);
+  const fresh = await Store.getEvent(current.id);
   current.tables = fresh.tables; current.guests = fresh.guests; current.fixtures = fresh.fixtures;
   renderAll();
 }
@@ -504,7 +489,7 @@ async function addTable(type, seats, x, y, label) {
   const m = KIND_MAP[type] || KIND_MAP.round;
   const n = current.tables.length;
   try {
-    const t = await api('POST', `/api/events/${current.id}/tables`, {
+    const t = await Store.createTable(current.id, {
       shape: m.shape, kind: m.kind, seats: m.kind === 'sweetheart' ? 2 : seats, label,
       x: x ?? 150 + (n % 4) * 190, y: y ?? 150 + Math.floor(n / 4) * 200,
     });
@@ -558,18 +543,18 @@ document.querySelectorAll('.tpl').forEach((b) => b.addEventListener('click', asy
 async function renameTable(table) {
   const name = prompt('Table name', table.label);
   if (name == null) return;
-  try { Object.assign(table, await api('PATCH', `/api/tables/${table.id}`, { label: name.trim() || table.label })); renderAll(); savedBlip(); }
+  try { Object.assign(table, await Store.updateTable(table.id, { label: name.trim() || table.label })); renderAll(); savedBlip(); }
   catch (e) { toast(e.message, true); }
 }
 async function changeSeats(table, delta) {
   const seats = Math.max(1, Math.min(20, table.seats + delta));
   if (seats === table.seats) return;
-  try { Object.assign(table, await api('PATCH', `/api/tables/${table.id}`, { seats })); await refresh(); savedBlip(); }
+  try { Object.assign(table, await Store.updateTable(table.id, { seats })); await refresh(); savedBlip(); }
   catch (e) { toast(e.message, true); }
 }
 async function deleteTable(table) {
   if (!confirm(`Remove “${table.label}”? Guests there will be unseated.`)) return;
-  try { await api('DELETE', `/api/tables/${table.id}`); await refresh(); savedBlip(); toast('Table removed'); }
+  try { await Store.deleteTable(table.id); await refresh(); savedBlip(); toast('Table removed'); }
   catch (e) { toast(e.message, true); }
 }
 
@@ -577,7 +562,7 @@ async function deleteTable(table) {
 async function rotateTable(table) {
   const orientation = table.orientation === 'vertical' ? 'horizontal' : 'vertical';
   try {
-    Object.assign(table, await api('PATCH', `/api/tables/${table.id}`, { orientation }));
+    Object.assign(table, await Store.updateTable(table.id, { orientation }));
     renderAll(); savedBlip();
   } catch (e) { toast(e.message, true); }
 }
@@ -602,7 +587,7 @@ function startFixtureDrag(e, node, fx) {
     document.removeEventListener('pointerup', up);
     node.classList.remove('dragging');
     if (moved) {
-      try { await api('PATCH', `/api/fixtures/${fx.id}`, { x: fx.x, y: fx.y }); savedBlip(); }
+      try { await Store.updateFixture(fx.id, { x: fx.x, y: fx.y }); savedBlip(); }
       catch (err) { toast('Could not save position', true); }
     }
   }
@@ -613,7 +598,7 @@ function startFixtureDrag(e, node, fx) {
 async function addFixture(ftype, label, x, y) {
   const n = (current.fixtures || []).length;
   try {
-    const fx = await api('POST', `/api/events/${current.id}/fixtures`, {
+    const fx = await Store.createFixture(current.id, {
       ftype, label, x: x ?? 260 + (n % 3) * 200, y: y ?? 220 + Math.floor(n / 3) * 160,
     });
     current.fixtures = current.fixtures || [];
@@ -627,14 +612,14 @@ async function renameFixture(fx) {
   const name = prompt('Name this room item', fx.label);
   if (name == null) return;
   try {
-    Object.assign(fx, await api('PATCH', `/api/fixtures/${fx.id}`, { label: name.trim() || fx.label }));
+    Object.assign(fx, await Store.updateFixture(fx.id, { label: name.trim() || fx.label }));
     renderAll(); savedBlip();
   } catch (e) { toast(e.message, true); }
 }
 
 async function rotateFixture(fx) {
   try {
-    Object.assign(fx, await api('PATCH', `/api/fixtures/${fx.id}`, { w: fx.h, h: fx.w }));
+    Object.assign(fx, await Store.updateFixture(fx.id, { w: fx.h, h: fx.w }));
     renderAll(); savedBlip();
   } catch (e) { toast(e.message, true); }
 }
@@ -642,7 +627,7 @@ async function rotateFixture(fx) {
 async function deleteFixture(fx) {
   if (!confirm(`Remove “${fx.label}” from the room?`)) return;
   try {
-    await api('DELETE', `/api/fixtures/${fx.id}`);
+    await Store.deleteFixture(fx.id);
     current.fixtures = (current.fixtures || []).filter((f) => f.id !== fx.id);
     renderAll(); savedBlip();
     toast('Removed');
@@ -654,139 +639,35 @@ $('#import-btn').addEventListener('click', () => $('#import-file').click());
 $('#import-file').addEventListener('change', async (e) => {
   const file = e.target.files[0];
   if (!file) return;
-  const fd = new FormData();
-  fd.append('file', file);
   try {
-    const result = await api('POST', `/api/events/${current.id}/guests/import`, fd, true);
+    const text = await new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result);
+      r.onerror = () => reject(new Error('Could not read that file'));
+      r.readAsText(file);
+    });
+    const result = await Store.importGuestsCsv(current.id, text);
     await refresh(); savedBlip();
     toast(`Imported ${result.imported} guests`);
   } catch (err) { toast(err.message, true); }
   e.target.value = '';
 });
 
-// ---------- session (quiet whoami in the header) ----------
-let ME = null; // {email, role} for the signed-in member
-async function loadWhoami() {
-  try {
-    const me = await api('GET', '/api/me');
-    ME = me;
-    const box = $('#whoami');
-    box.textContent = '';
-    box.append(`signed in as ${me.email} · `);
-    const out = el('a', null, 'sign out');
-    out.addEventListener('click', async () => {
-      try { await fetch('/logout', { method: 'POST' }); } catch (_) {}
-      location.href = '/login';
-    });
-    box.append(out);
-    if (me.role === 'admin') $('#gl-link').classList.remove('hidden');
-  } catch (_) { /* not signed in (test/bypass edge) — leave header quiet */ }
-}
-loadWhoami();
-
-// ---------- guest list (admin-only panel) ----------
-function glNote(msg, isErr) {
-  const n = $('#gl-note');
-  n.textContent = msg;
-  n.classList.remove('hidden');
-  n.classList.toggle('err', !!isErr);
-}
-
-function glAction(label, fn) {
-  const a = el('a', 'gl-act', label);
-  a.addEventListener('click', fn);
-  return a;
-}
-
-function glRow(m) {
-  const row = el('div', 'gl-row' + (m.status === 'blocked' ? ' blocked' : ''));
-
-  const who = el('div', 'gl-who');
-  who.append(el('div', 'gl-mail', m.email));
-  if (m.invited_by) {
-    const by = ME && m.invited_by === ME.email ? 'you' : m.invited_by;
-    who.append(el('div', 'gl-meta', `invited by ${by}`));
-  }
-
-  const chips = el('div', 'gl-chips');
-  chips.append(el('span', m.role === 'admin' ? 'chip' : 'chip plain', m.role));
-  chips.append(el('span', 'gl-status', m.joined ? 'joined' : 'invited'));
-  if (m.status === 'blocked') chips.append(el('span', 'chip rose', 'blocked'));
-
-  const acts = el('div', 'gl-acts');
-  const btns = el('div', 'gl-btns');
-  if (m.isLastAdmin || m.isSelf) {
-    // protected rows keep the controls visible but plainly disabled,
-    // captioned with the one-line why
-    btns.append(el('span', 'gl-act disabled', 'block'), el('span', 'gl-act disabled', 'remove'));
-    acts.append(btns, el('div', 'gl-why', m.isLastAdmin ? 'the last admin stays' : 'that’s you'));
-  } else {
-    if (m.status === 'blocked') {
-      btns.append(glAction('welcome back', () => glPatch(m.email, { status: 'active' }, `${m.email} is welcome again.`)));
-    } else {
-      btns.append(glAction('block', () => glPatch(m.email, { status: 'blocked' }, `${m.email} can no longer sign in.`)));
-    }
-    btns.append(glAction('remove', async () => {
-      if (!confirm(`Remove ${m.email} from the guest list?`)) return;
-      try {
-        await api('DELETE', `/api/admin/members/${encodeURIComponent(m.email)}`);
-        glNote(`${m.email} removed.`);
-        await loadMembers();
-      } catch (e) { glNote(e.message, true); }
-    }));
-    acts.append(btns);
-  }
-
-  row.append(who, chips, acts);
-  return row;
-}
-
-async function glPatch(email, body, doneMsg) {
-  try {
-    await api('PATCH', `/api/admin/members/${encodeURIComponent(email)}`, body);
-    glNote(doneMsg);
-    await loadMembers();
-  } catch (e) { glNote(e.message, true); }
-}
-
-async function loadMembers(highlight) {
-  const members = await api('GET', '/api/admin/members');
-  if (highlight) {
-    // freshly invited row surfaces at the top, gently highlighted, so the
-    // success note and the new row are visible together on a phone
-    const i = members.findIndex((m) => m.email === highlight);
-    if (i > 0) members.unshift(members.splice(i, 1)[0]);
-  }
-  const box = $('#gl-rows');
-  box.textContent = '';
-  members.forEach((m) => {
-    const r = glRow(m);
-    if (m.email === highlight) r.classList.add('new');
-    box.append(r);
-  });
-}
-
-$('#gl-link').addEventListener('click', async () => {
-  const panel = $('#guestlist');
-  const opening = panel.classList.contains('hidden');
-  panel.classList.toggle('hidden');
-  if (opening) {
-    try { await loadMembers(); } catch (e) { glNote(e.message, true); }
-    panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  }
-});
-
-$('#gl-form').addEventListener('submit', async (e) => {
+// ---------- export (client-generated CSV download) ----------
+$('#export-btn').addEventListener('click', async (e) => {
   e.preventDefault();
-  const input = $('#gl-email');
-  const email = input.value.trim().toLowerCase();
-  if (!email) return;
+  if (!current) return;
   try {
-    await api('POST', '/api/admin/members', { email });
-    glNote('Invited — ask them to sign in with Google.');
-    input.value = '';
-    await loadMembers(email);
-  } catch (err) { glNote(err.message, true); }
+    const csv = await Store.exportCsv(current.id);
+    const filename = await Store.exportFilename(current.id);
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    const a = el('a');
+    a.href = url; a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  } catch (err) { toast(err.message, true); }
 });
 
 // ---------- go ----------

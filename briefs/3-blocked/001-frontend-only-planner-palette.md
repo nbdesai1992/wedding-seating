@@ -3,8 +3,8 @@ id: 001-frontend-only-planner-palette
 title: "Frontend-Only Conversion + Planner Palette"
 created: "2026-08-02T00:40:00Z"
 updated: "2026-08-02T01:00:00Z"
-completion: 0/7
-outcome: pending
+completion: 1/7
+outcome: needs-human
 pending_replan: false
 turn_cap: 31
 ---
@@ -45,7 +45,7 @@ Simultaneously, its palette swaps to the superior one from the original planner 
   - Acceptance: computed-style probes show the new token values; visual diff of screenshots shows identical layout with the new palette; no blush `#e7c9c4`/`#d99a92` or sage `#7d8c72`/`#5f6d55` values remain in CSS.
 - [ ] **FR-4**: Feature parity, serverless. Room templates + ghost empty state, table shapes with seat dots, pointer drag-and-drop guest assignment (ghost pill, seat hover grow, toasts), guest rail with filters/progress, and CSV import (client-side parse: same column semantics as before) all work.
   - Acceptance: dev-browser screenshots of each interaction; CSV import demonstrated with a sample file.
-- [ ] **FR-5**: Tests. Unit tests for the storage module run via the existing `npm test` runner (`node --test`); old server tests are excluded from the default test run rather than left failing.
+- [x] **FR-5**: Tests. Unit tests for the storage module run via the existing `npm test` runner (`node --test`); old server tests are excluded from the default test run rather than left failing.
   - Acceptance: `npm test` exits 0 with the storage tests listed in output.
 - [ ] **FR-6**: UI integrity after the swap: no overlapping elements, no clipped text, no horizontal page scroll at 1440px and 375px.
   - Acceptance: screenshots at both widths of the main planner view (populated + empty states), visually checked; defects fixed and re-shot.
@@ -66,6 +66,7 @@ Simultaneously, its palette swaps to the superior one from the original planner 
 - **Storage layer**: one new module (e.g. `public/store.js`) exposing the same shapes `app.js` already consumes from the API, so `app.js` edits are mechanical call-site swaps, not logic rewrites. Namespaced localStorage key with a schema-version field.
 - **Static serving locally**: `npx serve public -l 3000` (no Express). The dormant `src/` server must not be needed for anything.
 - **Render**: the static site ALREADY EXISTS — human-authorized and created via API on 2026-08-02: `wedding-seating` (`srv-d9nbqfvqj5pc73ej1090`), URL `https://wedding-seating-uccb.onrender.com`, free plan, publishPath `public`, auto-deploy on push to main. No Blueprint step exists. The infra worker's job is verification + rewriting `render.yaml` to document the static-site reality (runtime: static, staticPublishPath: ./public, service name/notes). The workspace also hosts `personal_homepage` (srv-d787ms3uibrs73bhot2g) and `personal_site` (srv-d0tmjlm3jp1c73ep7rag) — a DIFFERENT project; never touch them. The old `wedding-seating-ymzs` node service + `wedding-seating-db` live elsewhere and are dead — never resume, modify, or delete.
+- **Push authorization (HUMAN, 2026-08-02):** the runner MAY run `git push` to main itself once work is committed and acceptance-verified — no push blocker needed. Pushing triggers the static site's auto-deploy; after pushing, verify the live URL per NFR-1.
 - **Reference for palette provenance** (read-only): `wedding-seating-planner` repo — `frontend/tailwind.config.ts` and `frontend/app/globals.css`.
 
 ## Success Criteria
@@ -93,14 +94,42 @@ _Filled just-in-time by the runner when this brief becomes active. Current phase
 
 | ID | Phase | Description | Agent | Requirements | Depends On | Files Owned | Status | Attempts |
 |----|-------|-------------|-------|--------------|------------|-------------|--------|----------|
+| p1-task-1 | 1 Serverless conversion | Create `public/store.js`: localStorage persistence layer (namespaced key + schema-version) exposing async CRUD for events/tables/fixtures/guests/assignments with the exact response shapes app.js consumes from the API (snake_case: `event_date`, `table_id`, `seat_index`, …); port CSV parse/serialize semantics from `src/csv.js` (name/email/notes/party column aliases) into the store; browser classic-script + Node CommonJS dual export. Write `test/store.test.js` unit tests (`node --test`); repoint `package.json` test script to store tests only so old server tests are excluded, not failing. | frontend-worker | FR-1, FR-5 | — | `public/store.js`, `test/store.test.js`, `package.json` | completed | 1 |
+| p1-task-2 | 1 Serverless conversion | Swap every `api()` call site in `public/app.js` to the store module (mechanical swaps); CSV import via FileReader → store parse (same toasts); export chart via client-side CSV Blob download (replace `/api/events/:id/export.csv` href); remove whoami/`/api/me`/logout/admin-members code from the active path; `index.html`: load `store.js` before `app.js`, remove guest-list panel + whoami/gl-link markup. `login.html`/`invited-only.html` stay dormant on disk, nothing routes to them. | frontend-worker | FR-1, FR-2, FR-4 | p1-task-1 | `public/app.js`, `public/index.html` | pending | 0 |
+| p2-task-1 | 2 Planner palette | Token-level palette + heading-type swap per the brief mapping (placeholder — detail at phase start). | frontend-worker | FR-3 | phase 1 | `design/tokens.css`, `public/styles.css`, HTML font links | pending | 0 |
+| p3-task-1 | 3 Local verification | Dev-browser acceptance pass: persistence flow, cold open, CSV import, drag-drop, 1440/375 screenshots, token probes; fix defects (placeholder). | frontend-worker | FR-1, FR-2, FR-3, FR-4, FR-6 | phase 2 | `public/*` fix pass | pending | 0 |
+| p4-task-1 | 4 Static deploy | Rewrite `render.yaml` as static-site documentation + verify existing service in pinned workspace; then live-URL verification after push (placeholder). | infra-worker | NFR-1 | phase 3 | `render.yaml` | pending | 0 |
 
 ## Progress Log
 
 _Append-only. One entry per working turn: timestamp, what happened, what's next._
 
+### 2026-08-02T03:48Z — Brief activated + decomposed
+- Moved 001 from `1-backlog/` to `2-active/`; created `session/001-frontend-only-planner-palette/`.
+- Recon: all server I/O in `public/app.js` funnels through one `api()` helper (~25 call sites: events/tables/fixtures/guests CRUD, CSV import, export.csv href, whoami + admin-members panel). CSV column semantics live in `src/csv.js`. Palette literals include rgba-form blush (`rgba(217,154,146,.15)`) and ~10 hardcoded `Cormorant Garamond` font refs. Render service is already static (auto-deploy on push); `render.yaml` is stale node-service docs. `main` in sync with `origin/main` — push-to-deploy is the established path.
+- Decomposed Phase 1 (serverless conversion) in detail: p1-task-1 (store.js + tests + test-script repoint), p1-task-2 (app.js call-site swap + de-auth + client CSV/export + index.html). Placeholder rows for phases 2 (palette), 3 (local verification), 4 (static deploy docs + live verify).
+- Next: spawn frontend-worker for p1-task-1.
+
+### 2026-08-02T04:02Z — p1-task-1 completed; FR-5 checked
+- frontend-worker delivered `public/store.js` (localStorage layer, key `wedding-seating:v1` + schemaVersion, async CRUD for events/tables/fixtures/guests, seat kick/unseat semantics, CSV import/export ported from `src/csv.js`/server routes, dual browser-global + CommonJS export) and `test/store.test.js` (26 tests); `package.json` test script now runs only store tests.
+- Runner spot-check: `npm test` (Node 20) exits 0, 26/26 pass listed; zero `fetch(` in store.js. **FR-5 checked** (acceptance verified directly). FR-1 advances but stays open until app.js swap + reload flow evidence.
+- Interface contract recorded in worker report (Store.* async methods, snake_case rows, `exportFilename()` helper). Note: default shell node is anaconda v10 — use nvm Node 20 for tests.
+- Human added push authorization to Technical Constraints: runner may `git push` to main once verified.
+- Next: spawn frontend-worker for p1-task-2 (app.js call-site swap + de-auth + client CSV/export + index.html).
+
+### 2026-08-02T17:30Z — CANCELLED by human clarification (main session)
+- Wires uncrossed: this repo was only ever the STYLING REFERENCE. The deliverable is `wedding-seating-planner` ("OLD"), revived fresh in nealdes.ai. This conversion mission is cancelled.
+- Salvage: `public/store.js` + `test/store.test.js` (26/26 passing localStorage layer) committed as WIP — reusable if this app ever goes frontend-only for real.
+- The `wedding-seating` static site (srv-d9nbqfvqj5pc73ej1090) has been SUSPENDED (free, reversible). Open question below.
+
 ## Blockers
 
-_None yet. Each blocker gets: title, type, description, context, options, and an empty `Resolution:` line for the human._
+### B-1: Mission cancelled — dispose of the scaffolding?
+- **Raised:** 2026-08-02T17:30:00Z · **Type:** needs-human-decision
+- **Description:** Deliverable moved to wedding-seating-planner. This repo's static site is suspended; the WIP store layer is committed.
+- **Options:** 1. Delete the static site + retire this brief 2. Keep both dormant for a future frontend-only revival
+- **Resolution:**
+
 
 ## Outcome
 

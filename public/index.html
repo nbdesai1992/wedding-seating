@@ -18,27 +18,11 @@
         <span class="brand">Seat <span class="amp">&amp;</span> Celebrate</span>
         <span class="tag">seating charts, made lovely</span>
         <span class="spacer"></span>
-        <a class="gl-link hidden" id="gl-link">Planning guest list</a>
-        <span class="whoami" id="whoami"></span>
       </div>
       <div class="hero">
         <div class="orn">&#10086; &#10086; &#10086;</div>
         <h1>Every guest, lovingly placed</h1>
         <p>Plan your tables the way you picture the room — then let everyone find their seat.</p>
-      </div>
-
-      <!-- GUEST LIST (admins only; revealed by the header link) -->
-      <div id="guestlist" class="hidden">
-        <div class="section"><h2>Guest list</h2><div class="rule"></div></div>
-        <p class="gl-sub">Everyone who can open this planner. Invite someone, then ask them to sign in with Google.</p>
-        <div class="card gl-card">
-          <form class="gl-invite" id="gl-form">
-            <input id="gl-email" type="email" placeholder="name@example.com" autocomplete="off" required />
-            <button type="submit" class="btn primary">Invite</button>
-          </form>
-          <div class="gl-note hidden" id="gl-note"></div>
-          <div id="gl-rows"></div>
-        </div>
       </div>
 
       <div class="section"><h2>Your celebrations</h2><div class="rule"></div></div>
@@ -144,6 +128,7 @@
   </div>
 
   <div id="toast" class="toast"></div>
+  <script src="/store.js"></script>
   <script src="/app.js"></script>
 </body>
 </html>
