@@ -2,7 +2,7 @@
 id: 001-frontend-only-planner-palette
 title: "Frontend-Only Conversion + Planner Palette"
 created: "2026-08-02T00:40:00Z"
-updated: "2026-08-02T00:40:00Z"
+updated: "2026-08-02T01:00:00Z"
 completion: 0/7
 outcome: pending
 pending_replan: false
@@ -51,7 +51,7 @@ Simultaneously, its palette swaps to the superior one from the original planner 
   - Acceptance: screenshots at both widths of the main planner view (populated + empty states), visually checked; defects fixed and re-shot.
 
 ### Non-Functional Requirements
-- [ ] **NFR-1**: Deployed as a **free Render static site** named `wedding-seating` in the `nealdes.ai` workspace ONLY (guard-enforced): `render.yaml` rewritten to `runtime: static` / `staticPublishPath: ./public`, Blueprint Instance created (human step — park a blocker with instructions when reached), live URL renders the converted app correctly.
+- [ ] **NFR-1**: Deployed as a **free Render static site** named `wedding-seating` in the `nealdes.ai` workspace ONLY (guard-enforced): `render.yaml` rewritten to document the static-site config (`runtime: static`, `staticPublishPath: ./public`), and the live URL `https://wedding-seating-uccb.onrender.com` renders the converted app correctly.
   - Acceptance: live URL screenshot passing the same checks as FR-6; `render services -o json` shows the static site in the pinned workspace; `personal_homepage` and `personal_site` untouched.
 
 ## Technical Constraints
@@ -65,7 +65,7 @@ Simultaneously, its palette swaps to the superior one from the original planner 
 - **Type swap**: `Cormorant Garamond` → `Playfair Display` (same restrained weights 500/600 + italic for the ampersand); Inter stays. Update the Google Fonts link accordingly. Do not change any font-size/letter-spacing values.
 - **Storage layer**: one new module (e.g. `public/store.js`) exposing the same shapes `app.js` already consumes from the API, so `app.js` edits are mechanical call-site swaps, not logic rewrites. Namespaced localStorage key with a schema-version field.
 - **Static serving locally**: `npx serve public -l 3000` (no Express). The dormant `src/` server must not be needed for anything.
-- **Render**: static site = free plan, no env vars, no database. Blueprint Instance creation is a HUMAN Dashboard step (park-and-continue). The workspace also hosts `personal_homepage` (srv-d787ms3uibrs73bhot2g) and `personal_site` (srv-d0tmjlm3jp1c73ep7rag) — a DIFFERENT project; never touch them. The old `wedding-seating-ymzs` node service + `wedding-seating-db` live elsewhere and are dead — never resume, modify, or delete.
+- **Render**: the static site ALREADY EXISTS — human-authorized and created via API on 2026-08-02: `wedding-seating` (`srv-d9nbqfvqj5pc73ej1090`), URL `https://wedding-seating-uccb.onrender.com`, free plan, publishPath `public`, auto-deploy on push to main. No Blueprint step exists. The infra worker's job is verification + rewriting `render.yaml` to document the static-site reality (runtime: static, staticPublishPath: ./public, service name/notes). The workspace also hosts `personal_homepage` (srv-d787ms3uibrs73bhot2g) and `personal_site` (srv-d0tmjlm3jp1c73ep7rag) — a DIFFERENT project; never touch them. The old `wedding-seating-ymzs` node service + `wedding-seating-db` live elsewhere and are dead — never resume, modify, or delete.
 - **Reference for palette provenance** (read-only): `wedding-seating-planner` repo — `frontend/tailwind.config.ts` and `frontend/app/globals.css`.
 
 ## Success Criteria
